@@ -1,9 +1,9 @@
-# ErgoFS
+# ErgoFS - Go impl of EroFS
 
 ## EroFS Filesystem
 
 <details>
-<summary>Filesystem</summary>
+<summary>Filesystem (C lang impl )</summary>
 
 ```
 .
@@ -94,7 +94,57 @@
 13 directories, 104 files
 ```
 
-</details>
+</details><br>
+
+<details>
+<summary>My file str</summary>
+
+### Disclaimer
+> this str is temporary and will be changed as this project gets more mature
+
+```
+.
+├── cmd
+│   ├── mkfs
+│   │   └── main.go
+│   └── verify
+│       └── main.go
+├── go.mod
+├── pkg
+│   ├── compression
+│   │   ├── algorithms.go
+│   │   ├── compress.go
+│   │   └── lz4.go
+│   ├── dedupe
+│   │   └── dedupe.go
+│   ├── types
+│   │   ├── config.go
+│   │   ├── constants.go
+│   │   ├── debug.go
+│   │   ├── inode.go
+│   │   └── superblock.go
+│   ├── util
+│   │   ├── blocklist.go
+│   │   └── diskbuf.go
+│   └── writer
+│       ├── builder.go
+│       ├── inode.go
+│       ├── utils.go
+│       └── xattr.go
+├── README.md
+├── script.sh
+└── test.img
+
+14 directories, 27 files
+```
+
+</details><br>
+
+### Project Structure (for now)
+
+* `pkg/types/`: Core data structures and constants
+* `pkg/writer/`: Filesystem creation functionality
+* `cmd/mkfs/`: Command line interface
 
 ## How to use?
 
@@ -254,3 +304,9 @@ Mount failed. Checking kernel messages...
 ```
 
 </details>
+
+## Hardblocks
+
+getting this `[ 2829.015916] erofs: (device loop48): erofs_read_superblock: cannot find valid erofs superblock`
+
+Not sure where the issue lies
