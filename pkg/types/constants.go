@@ -36,12 +36,16 @@ const (
 	// // Common block sizes as powers of 2 <defined by me>
 	// EROFS_BLKSIZ_BITS_MIN uint8 = 9  // 512 bytes
 	// EROFS_BLKSIZ_BITS_DEF uint8 = 12 // 4096 bytes
+
+	// Common block sizes (these are derived from the code logic, not explicit constants)
+	EROFS_MIN_BLOCK_SIZE uint32 = 512
 )
 
 // Superblock feature flags
 const (
-	EROFS_SUPER_MAGIC_V1 uint32 = 0xE0F5E1E2
-	EROFS_SUPER_OFFSET   uint32 = 1024
+	EROFS_SUPER_MAGIC_V1 uint32 = 0xE0F5E1E0
+	// EROFS_SUPER_MAGIC_V1 uint32 = 0xE0F5E1E2
+	EROFS_SUPER_OFFSET uint32 = 1024
 
 	EROFS_SB_EXTSLOT_SIZE uint32 = 16
 
@@ -89,15 +93,30 @@ const (
 	EROFS_INODE_LAYOUT_EXTENDED = 1
 )
 
+// Inode const.
 const (
-	EROFS_INODE_FLAT_PLAIN         InodeDataLayout = 0
-	EROFS_INODE_COMPRESSED_FULL    InodeDataLayout = 1
-	EROFS_INODE_FLAT_INLINE        InodeDataLayout = 2
-	EROFS_INODE_COMPRESSED_COMPACT InodeDataLayout = 3
-	EROFS_INODE_CHUNK_BASED        InodeDataLayout = 4
-	EROFS_INODE_DATALAYOUT_MAX     InodeDataLayout = 5
+	EROFS_INODE_FLAT_PLAIN         = 0
+	EROFS_INODE_COMPRESSED_FULL    = 1
+	EROFS_INODE_FLAT_INLINE        = 2
+	EROFS_INODE_COMPRESSED_COMPACT = 3
+	EROFS_INODE_CHUNK_BASED        = 4
+	EROFS_INODE_DATALAYOUT_MAX     = 5
 )
 
+// Erofs_FT
+const (
+	EROFS_FT_UNKNOWN = iota
+	EROFS_FT_REG_FILE
+	EROFS_FT_DIR
+	EROFS_FT_CHRDEV
+	EROFS_FT_BLKDEV
+	EROFS_FT_FIFO
+	EROFS_FT_SOCK
+	EROFS_FT_SYMLINK
+	EROFS_FT_MAX
+)
+
+// INODE Data const.
 const (
 	EROFS_INODE_DATA_SOURCE_NONE      = 0
 	EROFS_INODE_DATA_SOURCE_LOCALPATH = 1
@@ -114,6 +133,7 @@ const (
 	EROFS_PACKED_NID_UNALLOCATED = -1
 )
 
+// config const.
 const (
 	// config.h
 	EROFS_MAX_COMPR_CFGS uint32 = 64
@@ -134,6 +154,7 @@ const (
 	FRAGDEDUPE_OFF   // 2
 )
 
+// ReadDIR const.
 const (
 	// dir.h
 	EROFS_READDIR_VALID_PNID   = 0x0001
@@ -164,6 +185,7 @@ const (
 	EROFS_MSG_MAX = 9
 )
 
+// IOS const.
 const (
 	// tar.h
 	EROFS_IOS_DECODER_NONE    = 0
@@ -183,6 +205,7 @@ const (
 	Z_EROFS_CLUSTER_MAX_PAGES  uint32 = 4 // Maximum 4 pages in a cluster
 )
 
+// EROFS common
 const (
 	EROFSIVersionMask    = 0x01
 	EROFSIDataLayoutMask = 0x07
@@ -216,36 +239,28 @@ const (
 	EROFSNullAddr = -1
 )
 
+// ZeroFSL
 const (
 	ZEROFSCompressionLZ4     = 0
 	ZEROFSCompressionLZMA    = 1
 	ZEROFSCompressionDeflate = 2
 	ZEROFSCompressionZSTD    = 3
 	ZEROFSCompressionMax     = 4
-)
 
-const (
 	ZEROFSAdviseCompacted2B        = 0x0001
 	ZEROFSAdviseBigPCluster1       = 0x0002
 	ZEROFSAdviseBigPCluster2       = 0x0004
 	ZEROFSAdviseInlinePCluster     = 0x0008
 	ZEROFSAdviseInterlacedPCluster = 0x0010
 	ZEROFSAdviseFragmentPCluster   = 0x0020
-)
 
-const (
-	ZEROFSFragmentInodeBit = 7
-)
-
-const (
 	ZEROFSLClusterTypePlain   = 0
 	ZEROFSLClusterTypeHead1   = 1
 	ZEROFSLClusterTypeNonHead = 2
 	ZEROFSLClusterTypeHead2   = 3
 	ZEROFSLClusterTypeMax     = 4
-)
+	ZEROFSFragmentInodeBit    = 7
 
-const (
 	ZEROFSLILClusterTypeMask = ZEROFSLClusterTypeMax - 1
 	ZEROFSLIPartialRef       = 1 << 15
 	ZEROFSLID0CblkCnt        = 1 << 11
@@ -268,6 +283,7 @@ const (
 	EROFS_MKFS_DATA_IMPORT_SPARSE   = 3 // Sparse data import mode
 )
 
+// cache const.
 const (
 	// Cache.h
 	DATA  = 0
@@ -278,6 +294,19 @@ const (
 	DEVT  = 5
 )
 
+const NR_HARDLINK_HASHTABLE = 16384
+
+// ForceInodeVersion represents the forced inode version setting
+type ForceInodeVersion uint8
+
+type ForceChunkFormat uint8
+
+// TimestampType represents the timestamp inheritance mode
+type TimestampType uint8
+
+// FragDedupeMode represents the fragment deduplication mode
+type FragDedupeMode uint8
+
 // ====== internal.h ======
 type ErofsOffT uint64
 
@@ -286,7 +315,7 @@ type ErofsNidT uint64
 type ErofsBlkT uint32
 
 // ====== erofs_fs.h ======
-type InodeDataLayout int
+// type InodeDataLayout int
 
 // #define EROFS_DEVT_SLOT_SIZE	sizeof(struct erofs_deviceslot)
 // #define EROFS_XATTR_ALIGN(size) round_up(size, sizeof(struct erofs_xattr_entry))
