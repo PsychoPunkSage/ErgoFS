@@ -109,7 +109,11 @@
 │   │   └── main.go
 │   └── verify
 │       └── main.go
+├── c_reference.img
 ├── go.mod
+├── go_reference.img
+├── mkfs.erofs
+├── mount_point
 ├── pkg
 │   ├── compression
 │   │   ├── algorithms.go
@@ -125,6 +129,7 @@
 │   │   └── superblock.go
 │   ├── util
 │   │   ├── blocklist.go
+│   │   ├── buffer.go
 │   │   └── diskbuf.go
 │   └── writer
 │       ├── builder.go
@@ -132,13 +137,29 @@
 │       ├── utils.go
 │       └── xattr.go
 ├── README.md
+├── report
+│   ├── c_hexdump.txt
+│   ├── c_superblock.bin
+│   ├── c_superblock.txt
+│   ├── diff.log
+│   ├── diff_superblock.log
+│   ├── go_hexdump.txt
+│   ├── go_superblock.bin
+│   └── go_superblock.txt
+├── report.sh
 ├── script.sh
-└── test.img
+├── test
+└── test_data
+    ├── hello.txt
+    ├── random.bin
+    ├── subdir
+    │   └── test.txt
+    └── symlink -> hello.txt
 
-14 directories, 27 files
+15 directories, 37 files
 ```
 
-</details><br>
+</details>
 
 ### Project Structure (for now)
 
@@ -153,7 +174,7 @@
 ```
 
 <details>
-<summary>OUTPUT</summary>
+<summary>OUTPUT(Go-ErgoFS)</summary>
 
 ```
 ===== EROFS Testing Script =====
@@ -198,8 +219,43 @@ Mount failed. Checking kernel messages...
 
 </details>
 
+<hr>
+
+```sh
+./script.sh
+```
+
+<details>
+<summary>OUTPUT(C-EroFS)</summary>
+
+```
+mkfs.erofs 1.8.5-g6fa861e2-dirty
+<I> erofs_io: successfully to open c_reference.img
+	c_version:           [1.8.5-g6fa861e2-dirty]
+	c_dbg_lvl:           [       4]
+	c_dry_run:           [       0]
+<I> erofs: file / dumped (mode 40775)
+<I> erofs: file /hello.txt dumped (mode 100664)
+<I> erofs: file /random.bin dumped (mode 100664)
+<I> erofs: file /subdir dumped (mode 40775)
+<I> erofs: file /symlink dumped (mode 120777)
+<I> erofs: file /subdir/test.txt dumped (mode 100664)
+<I> erofs: superblock checksum 0x1be3f68f written
+------
+Filesystem UUID: 7dd00173-4052-4115-9b79-fcca49d178c1
+Filesystem total blocks: 257 (of 4096-byte blocks)
+Filesystem total inodes: 6
+Filesystem total metadata blocks: 1
+Filesystem total deduplicated bytes (of source files): 0
+```
+
+</details>
+
 ## Hardblocks
 
-getting this `[ 2829.015916] erofs: (device loop48): erofs_read_superblock: cannot find valid erofs superblock`
+getting this `[59132.367167] erofs: (device loop48): erofs_read_superblock: dirblkbits 12 isn't supported` 
+* this is weird cause I'm not hardonding anything to 12 yet I'm getting same error over and over again
+
+You can have a look [@Report](./report/) (I have compared images I got from C and Go based EroFS)
 
 Not sure where the issue lies

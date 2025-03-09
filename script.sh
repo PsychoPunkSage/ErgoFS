@@ -21,7 +21,7 @@ go build -o mkfs.erofs ./cmd/mkfs
 # Create EROFS image
 echo "Creating EROFS image..."
 # ./mkfs.erofs -d 4 -o test.img -i test_data
-./mkfs.erofs -d 4 -o test.img -i /home/psychopunk_sage/dev/OpenSource/Unikraft/erofs-utils/test_data
+./mkfs.erofs -d 4 -o go_reference.img -i /home/psychopunk_sage/dev/OpenSource/Unikraft/erofs-utils/test_data
 
 # Verify the image
 # echo "Verifying image before fix..."
@@ -37,7 +37,7 @@ mkdir -p mount_point
 
 # Try to mount
 echo "Attempting to mount the image..."
-if sudo mount -t erofs -o ro test.img mount_point; then
+if sudo mount -t erofs -o ro go_reference.img mount_point; then
     echo "Mount successful!"
     
     # List the contents
