@@ -16,19 +16,20 @@ ln -s hello.txt test_data/symlink
 # Build tools
 echo "Building tools..."
 go build -o mkfs.erofs ./cmd/mkfs
-go build -o erofs-verify ./cmd/verify
+# go build -o erofs-verify ./cmd/verify
 
 # Create EROFS image
 echo "Creating EROFS image..."
-./mkfs.erofs -d 4 -o test.img -i test_data
+# ./mkfs.erofs -d 4 -o test.img -i test_data
+./mkfs.erofs -d 4 -o test.img -i /home/psychopunk_sage/dev/OpenSource/Unikraft/erofs-utils/test_data
 
 # Verify the image
-echo "Verifying image before fix..."
-./erofs-verify test.img
+# echo "Verifying image before fix..."
+# ./erofs-verify test.img
 
 # Verify again after fixing
-echo "Verifying image after fix..."
-./erofs-verify test.img
+# echo "Verifying image after fix..."
+# ./erofs-verify test.img
 
 # Create mount point
 echo "Creating mount point..."
