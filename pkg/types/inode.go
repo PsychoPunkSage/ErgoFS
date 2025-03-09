@@ -1,209 +1,90 @@
 package types
 
 import (
-	"encoding/binary"
 	"time"
 )
 
-// InodeCompact represents the on-disk compact inode structure
-type InodeCompact struct {
-	Format          uint16 // Inode format
-	XattrInodeCount uint16 // Inode xattr count
-	AccessMode      uint16 // Permissions + file type
-	NLink           uint16 // Hard links count
-	Uid             uint16 // Owner's user ID
-	Gid             uint16 // Owner's group ID
-	Reserved        uint32 // Reserved for extension
-	ModifyTime      uint64 // Inode modification time
-	ModifyNSec      uint32 // Modification time, nanosecond part
-	DevSlot         uint32 // Block device slot
-}
-
-// InodeExtended represents the on-disk extended inode structure
-type InodeExtended struct {
-	InodeCompact        // Embedded compact inode
-	Size         uint64 // File size
-}
-
-// ZIndexTail represents the tail for z-erofs indexing
-type ZIndexTail struct {
-	BlkAddr  uint32 // Block address for the chunk
-	Reserved uint32 // Reserved for extension
-}
-
-// XattrHeader represents the header for extended attributes
-type XattrHeader struct {
-	Magic    uint32 // Magic number for the xattr
-	Checksum uint32 // CRC32C checksum
-}
-
-// XattrEntry represents an extended attribute entry
-type XattrEntry struct {
-	NameOff   uint16 // Name offset in the string table
-	NameLen   uint8  // Name length
-	NameHash  uint8  // Name hash
-	ValueSize uint16 // Size of value
-	Reserved  uint16 // Reserved for extension
-}
-
-// StatInfo represents file stat information
-type StatInfo struct {
-	Ino       uint64    // Inode number
-	Mode      uint16    // File mode
-	Type      uint8     // File type (from EROFS_FT_*)
-	Uid       uint32    // User ID
-	Gid       uint32    // Group ID
-	Size      uint64    // File size
-	ModTime   time.Time // Modification time
-	NLink     uint32    // Number of hard links
-	RdevMajor uint32    // Major device number for special files
-	RdevMinor uint32    // Minor device number for special files
-}
-
-// DirEntry represents a directory entry
-type DirEntry struct {
-	Nid      uint64 // Target inode number
-	NameLen  uint16 // Name length
-	FileType uint8  // File type (from EROFS_FT_*)
-	Reserved uint8  // Reserved for extension
-	Name     string // Entry name
-}
-
-// Inode represents an in-memory inode
+// Inode represents an EroFS inode
 type Inode struct {
-	Nid        uint64            // Inode number
-	BlockAddr  uint32            // Block address for the inode
-	Stat       StatInfo          // File statistics
-	DataLayout uint8             // Data layout (EROFS_INODE_FLAT_*)
-	Xattrs     map[string][]byte // Extended attributes
-	Data       []byte            // Inode data
-	Parent     *Inode            // Parent inode (for non-root inodes)
-	Children   []*Inode          // Child inodes (for directories)
-	Name       string            // File name (basename)
-	SourcePath string            // Source file path
+	Sbi    *SuperBlkInfo
+	Parent *Inode
+
+	// Basic inode attributes
+	Mode      uint16
+	Size      uint64
+	Ino       [2]uint64
+	Uid       uint32
+	Gid       uint32
+	Mtime     uint64
+	MtimeNsec uint32
+	Nlink     uint32
+
+	// Union for block address or device ID
+	BlkAddr uint32
+	Blocks  uint32
+	Rdev    uint32
+
+	// Data layout
+	DataLayout      uint8
+	InodeIsize      uint8
+	IdataSize       uint16
+	DataSource      uint8
+	CompressedIdata bool
+	LazyTailblock   bool
+	Opaque          bool
+	Whiteouts       bool
+
+	// Extended attributes
+	XattrIsize  uint32
+	ExtentIsize uint32
+
+	// NID and buffer heads
+	Nid      uint64
+	Bh       *BufferHead
+	BhInline *BufferHead
+	BhData   *BufferHead
+
+	// Compression info
+	ZAdvise              uint16
+	ZAlgorithmType       [2]uint8
+	ZLogicalClusterBits  uint8
+	ZPhysicalClusterBlks uint8
 }
 
-// NewInode creates a new inode
-func NewInode(nid uint64, name string, stat StatInfo) *Inode {
+// NewInode creates a new inode with default values
+func NewInode(sbi *SuperBlkInfo) *Inode {
 	return &Inode{
-		Nid:        nid,
-		Stat:       stat,
+		Sbi:        sbi,
 		DataLayout: EROFS_INODE_FLAT_PLAIN,
-		Xattrs:     make(map[string][]byte),
-		Name:       name,
-		SourcePath: name,
-		Children:   make([]*Inode, 0),
+		Mtime:      uint64(time.Now().Unix()),
+		MtimeNsec:  uint32(time.Now().Nanosecond()),
 	}
 }
 
-// AddChild adds a child inode to a directory inode
-func (inode *Inode) AddChild(child *Inode) {
-	child.Parent = inode
-	inode.Children = append(inode.Children, child)
+// IsDir returns true if the inode is a directory
+func (i *Inode) IsDir() bool {
+	return (i.Mode & 0170000) == 040000 // S_IFDIR
 }
 
-// IsDirectory returns true if the inode is a directory
-func (inode *Inode) IsDirectory() bool {
-	return inode.Stat.Type == EROFS_FT_DIR
+// IsReg returns true if the inode is a regular file
+func (i *Inode) IsReg() bool {
+	return (i.Mode & 0170000) == 0100000 // S_IFREG
 }
 
-// IsRegular returns true if the inode is a regular file
-func (inode *Inode) IsRegular() bool {
-	return inode.Stat.Type == EROFS_FT_REG_FILE
+// IsLnk returns true if the inode is a symbolic link
+func (i *Inode) IsLnk() bool {
+	return (i.Mode & 0170000) == 0120000 // S_IFLNK
 }
 
-// IsSymlink returns true if the inode is a symlink
-func (inode *Inode) IsSymlink() bool {
-	return inode.Stat.Type == EROFS_FT_SYMLINK
+// IsCompressed returns true if the inode data is compressed
+func (i *Inode) IsCompressed() bool {
+	return i.DataLayout == EROFS_INODE_COMPRESSED_FULL ||
+		i.DataLayout == EROFS_INODE_COMPRESSED_COMPACT
 }
 
-// AddXattr adds an extended attribute
-func (inode *Inode) AddXattr(name string, value []byte) {
-	inode.Xattrs[name] = value
-}
-
-// EncodeCompactInode encodes a compact inode to binary
-func EncodeCompactInode(inode *Inode) []byte {
-	data := make([]byte, 32) // Size of InodeCompact
-
-	// Format
-	binary.LittleEndian.PutUint16(data[0:2], uint16(inode.DataLayout))
-
-	// XattrInodeCount
-	binary.LittleEndian.PutUint16(data[2:4], uint16(len(inode.Xattrs)))
-
-	// AccessMode
-	binary.LittleEndian.PutUint16(data[4:6], inode.Stat.Mode)
-
-	// NLink
-	binary.LittleEndian.PutUint16(data[6:8], uint16(inode.Stat.NLink))
-
-	// Uid and Gid
-	binary.LittleEndian.PutUint16(data[8:10], uint16(inode.Stat.Uid))
-	binary.LittleEndian.PutUint16(data[10:12], uint16(inode.Stat.Gid))
-
-	// Reserved
-	binary.LittleEndian.PutUint32(data[12:16], 0)
-
-	// ModifyTime
-	binary.LittleEndian.PutUint64(data[16:24], uint64(inode.Stat.ModTime.Unix()))
-
-	// ModifyNSec
-	binary.LittleEndian.PutUint32(data[24:28], uint32(inode.Stat.ModTime.Nanosecond()))
-
-	// DevSlot
-	binary.LittleEndian.PutUint32(data[28:32], 0)
-
-	return data
-}
-
-// EncodeExtendedInode encodes an extended inode to binary
-func EncodeExtendedInode(inode *Inode) []byte {
-	data := make([]byte, 40) // Size of InodeExtended
-
-	// First encode the compact part
-	compactData := EncodeCompactInode(inode)
-	copy(data, compactData)
-
-	// Size
-	binary.LittleEndian.PutUint64(data[32:40], inode.Stat.Size)
-
-	return data
-}
-
-// EncodeDirEntries encodes directory entries to binary
-func EncodeDirEntries(entries []DirEntry) []byte {
-	totalSize := 0
-	for _, entry := range entries {
-		// 12 bytes for fixed header + name length
-		entrySize := 12 + len(entry.Name)
-		// Align to 4 bytes
-		entrySize = (entrySize + 3) & ^3
-		totalSize += entrySize
-	}
-
-	data := make([]byte, totalSize)
-	offset := 0
-
-	for _, entry := range entries {
-		// Nid (8 bytes)
-		binary.LittleEndian.PutUint64(data[offset:offset+8], entry.Nid)
-
-		// NameLen (2 bytes)
-		binary.LittleEndian.PutUint16(data[offset+8:offset+10], entry.NameLen)
-
-		// FileType and Reserved (1 byte each)
-		data[offset+10] = entry.FileType
-		data[offset+11] = entry.Reserved
-
-		// Name
-		nameBytes := []byte(entry.Name)
-		copy(data[offset+12:], nameBytes)
-
-		// Move to next entry with alignment
-		offset += 12 + len(entry.Name)
-		offset = (offset + 3) & ^3
-	}
-
-	return data
+// SetRoot marks the inode as root directory
+func (i *Inode) SetRoot() {
+	i.Mode = 040755 // directory with 0755 permissions
+	i.Nlink = 2     // . and ..
+	i.Parent = i    // Root is its own parent
 }
