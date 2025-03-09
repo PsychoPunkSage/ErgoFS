@@ -1,6 +1,9 @@
 package types
 
-import "math"
+import (
+	"math"
+	"unsafe"
+)
 
 // EROFS filesystem constants derived from the C implementation
 // Many of these constants come from the C header files in the erofs-utils project
@@ -23,6 +26,7 @@ const (
 
 	// EROFS_MAX_BLOCK_SIZE is the maximum block size supported by EROFS
 	EROFS_MAX_BLOCK_SIZE uint32 = 4096
+	EROFS_MIN_BLOCK_SIZE uint32 = 512
 	PATH_MAX             uint32 = 4096
 
 	EROFS_ISLOBITS uint32 = 5
@@ -38,14 +42,15 @@ const (
 	// EROFS_BLKSIZ_BITS_DEF uint8 = 12 // 4096 bytes
 
 	// Common block sizes (these are derived from the code logic, not explicit constants)
-	EROFS_MIN_BLOCK_SIZE uint32 = 512
 )
 
 // Superblock feature flags
 const (
-	EROFS_SUPER_MAGIC_V1 uint32 = 0xE0F5E1E0
-	// EROFS_SUPER_MAGIC_V1 uint32 = 0xE0F5E1E2
-	EROFS_SUPER_OFFSET uint32 = 1024
+	// EROFS_SUPER_MAGIC_V1 uint32 = 0xE0F5E1E0
+	EROFS_SUPER_MAGIC_V1 uint32 = 0xE0F5E1E2
+	EROFS_SUPER_OFFSET   uint32 = 1024
+	EROFS_SUPER_END             = EROFS_SUPER_OFFSET + uint32(unsafe.Sizeof(SuperBlock{}))
+	// EROFS_SUPER_END = EROFS_SUPER_OFFSET + 128
 
 	EROFS_SB_EXTSLOT_SIZE uint32 = 16
 
@@ -130,7 +135,7 @@ const (
 )
 
 const (
-	EROFS_PACKED_NID_UNALLOCATED = -1
+	EROFS_PACKED_NID_UNALLOCATED = 0
 )
 
 // config const.
@@ -236,7 +241,7 @@ const (
 	EROFSXattrFilterDefault = math.MaxUint32
 	EROFSXattrFilterSeed    = 0x25BBE08F
 
-	EROFSNullAddr = -1
+	EROFSNullAddr = 0
 )
 
 // ZeroFSL
