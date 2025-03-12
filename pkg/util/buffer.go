@@ -227,9 +227,10 @@ func MapBh(bmgr *types.BufferManager, bb *types.BufferBlock) uint32 {
 		blkAddr = bmgr.TailBlkAddr
 		bmgr.TailBlkAddr++
 		bmgr.MetaBlkCnt++
+
 	} else {
 		// Walk backward to reuse free block slots
-		bucketIndex := blkSize % uint32(len(bmgr.MappedBuckets[0]))
+		bucketIndex := blkSize % uint64(len(bmgr.MappedBuckets[0]))
 		head := bmgr.MappedBuckets[bb.Type][bucketIndex][0].Prev
 
 		if head != &bmgr.MappedBuckets[bb.Type][bucketIndex][0] {
@@ -251,7 +252,7 @@ func MapBh(bmgr *types.BufferManager, bb *types.BufferBlock) uint32 {
 	bb.BlkAddr = blkAddr
 
 	// Add to mapped bucket
-	bucketIndex := blkSize % uint32(len(bmgr.MappedBuckets[0]))
+	bucketIndex := blkSize % uint64(len(bmgr.MappedBuckets[0]))
 	ListAdd(&bb.MappedList, &bmgr.MappedBuckets[bb.Type][bucketIndex][0])
 	bmgr.LastMappedBlock = bb
 
