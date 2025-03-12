@@ -1,8 +1,10 @@
 package types
 
 import (
+	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 )
 
@@ -136,6 +138,13 @@ func DefaultOptions(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat = EROFS_FEATURE_INCOMPAT_ZERO_PADDING
 	sbi.FeatureCompat = EROFS_FEATURE_COMPAT_SB_CHKSUM |
 		EROFS_FEATURE_COMPAT_MTIME
+}
+
+func ShowProgs(args []string) {
+	if GlobalConfig.DebugLevel >= EROFS_WARN {
+		programName := filepath.Base(args[0])
+		fmt.Printf("%s %s\n", programName, GlobalConfig.Version)
+	}
 }
 
 // isatty determines if stdout is a TTY (similar to C's isatty function)
