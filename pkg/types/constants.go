@@ -299,6 +299,34 @@ const (
 	DEVT  = 5
 )
 
+// EROFS fragment size constants
+const (
+	EROFS_FRAGMENT_INMEM_SZ_MAX = 256 * 1024
+	EROFS_TOF_HASHLEN           = 16
+
+	// Fragment hash constants
+	FRAGMENT_HASHSIZE = 65536
+)
+
+// Encoding of the file mode.
+const (
+	S_IFMT = 0170000 /* These bits determine file type.  */
+
+	/* File types.  */
+	S_IFDIR  = 0040000 /* Directory.  */
+	S_IFCHR  = 0020000 /* Character device.  */
+	S_IFBLK  = 0060000 /* Block device.  */
+	S_IFREG  = 0100000 /* Regular file.  */
+	S_IFIFO  = 0010000 /* FIFO.  */
+	S_IFLNK  = 0120000 /* Symbolic link.  */
+	S_IFSOCK = 0140000 /* Socket.  */
+)
+
+// FRAGMENT_HASH computes the hash for a fragment
+func FRAGMENT_HASH(c uint) uint {
+	return c & (FRAGMENT_HASHSIZE - 1)
+}
+
 const NR_HARDLINK_HASHTABLE = 16384
 
 // ForceInodeVersion represents the forced inode version setting
