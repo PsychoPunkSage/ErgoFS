@@ -6,7 +6,9 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"math"
+	"syscall"
 	"time"
+	"unsafe"
 )
 
 // SuperBlock represents the on-disk EROFS superblock structure
@@ -168,7 +170,7 @@ type SuperBlkInfo struct {
 	FeatureIncompat uint32
 
 	// Block size info
-	ISlotBits uint8
+	ISlotBits uint8 // unsigned char
 	BlkSzBits uint8
 
 	// Superblock metadata
@@ -203,19 +205,65 @@ type SuperBlkInfo struct {
 	XattrPrefixCount uint8
 	XattrPrefixes    []XattrPrefixItem
 
+	BDev     *ErofsVFile
+	DevBlkSz int
+	Devsz    uint64
+	DevT     uint64
+
 	// Blob information
 	NBlobs uint32
 	BlobFd [256]uint32
 
 	// Buffer manager
 	Bmgr        *BufferManager
-	PackedInode *PackedInode
+	PackedInode *ErofsPackedInode
 
 	// Deduplication stats
 	SavedByDeduplication uint64
 
 	// Useqpl flag
 	UseQpl bool
+}
+
+type ErofsVfops struct {
+	// Function pointers are replaced with function types in Go
+	Pread     func(vf *ErofsVFile, buf []byte, offset uint64, len uint64) int64
+	Pwrite    func(vf *ErofsVFile, buf []byte, offset uint64, len uint64) int64
+	Fsync     func(vf *ErofsVFile) int
+	Fallocate func(vf *ErofsVFile, offset uint64, len uint64, pad bool) int
+	Ftruncate func(vf *ErofsVFile, length uint64) int
+	Read      func(vf *ErofsVFile, buf []byte, len uint64) int64
+	Lseek     func(vf *ErofsVFile, offset uint64, whence int) int64
+	Fstat     func(vf *ErofsVFile, buf *syscall.Stat_t) int
+	Xcopy     func(vout *ErofsVFile, pos int64, vin *ErofsVFile, len uint, noseek bool) int
+}
+
+type ErofsVFile struct {
+	Ops *ErofsVfops
+
+	Offset uint64
+	Fd     int
+
+	// Payload provides alternative access to Offset and Fd as a byte array
+	// Go doesn't have unions, so this is a common pattern to mimic them
+	// using unsafe.Pointer to access the same memory
+}
+
+// GetPayload returns the payload byte array view of the file data
+func (vf *ErofsVFile) GetPayload() [16]byte {
+	var payload [16]byte
+	// This is a way to access the same memory region as the Offset and Fd fields
+	// It's similar to how C unions work
+	data := (*[16]byte)(unsafe.Pointer(&vf.Offset))
+	copy(payload[:], data[:])
+	return payload
+}
+
+// SetPayload sets the file data using the payload byte array
+func (vf *ErofsVFile) SetPayload(payload [16]byte) {
+	// Copy the payload into the memory used by Offset and Fd
+	data := (*[16]byte)(unsafe.Pointer(&vf.Offset))
+	copy(data[:], payload[:])
 }
 
 // DeviceInfo represents information about a device in a multi-device setup
@@ -233,11 +281,6 @@ type XattrPrefixItem struct {
 
 // XattrLongPrefix represents a long extended attribute prefix <PPS:: See in C>
 type XattrLongPrefix struct {
-	// Add fields as needed for your implementation
-}
-
-// PackedInode represents a packed inode <PPS:: See in C>
-type PackedInode struct {
 	// Add fields as needed for your implementation
 }
 
@@ -274,12 +317,6 @@ type BufferHeadOps struct {
 	Flush func(*BufferHead) int
 }
 
-// ListHead represents a linked list head
-type ListHead struct {
-	Prev *ListHead
-	Next *ListHead
-}
-
 // Initialize a new SuperBlockInfo with default values
 func NewSuperBlockInfo() *SuperBlkInfo {
 	sbi := &SuperBlkInfo{
@@ -287,6 +324,7 @@ func NewSuperBlockInfo() *SuperBlkInfo {
 		FeatureIncompat: EROFS_FEATURE_INCOMPAT_ZERO_PADDING,
 		FeatureCompat:   EROFS_FEATURE_COMPAT_SB_CHKSUM | EROFS_FEATURE_COMPAT_MTIME,
 		ISlotBits:       5, // EROFS_ISLOTBITS
+		TotalBlocks:     1, // Start with 1 for the superblock itself
 	}
 
 	// Generate a random UUID
@@ -324,7 +362,7 @@ func (sbi *SuperBlkInfo) SetCustomTimestamp(timestamp uint64) {
 }
 
 // ErofsBlockSize returns the block size in bytes
-func (sbi *SuperBlkInfo) ErofsBlockSize() uint32 {
+func (sbi *SuperBlkInfo) ErofsBlockSize() uint64 {
 	return 1 << sbi.BlkSzBits
 }
 
