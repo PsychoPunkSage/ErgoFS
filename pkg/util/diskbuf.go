@@ -10,6 +10,53 @@ import (
 	"github.com/PsychoPunkSage/ErgoFS/pkg/types"
 )
 
+func ErofsTempfile() (int, error) {
+	// Get the temp dir
+	tmpDir := os.Getenv("TMPDIR")
+	if tmpDir == "" {
+		tmpDir = "/tmp"
+	}
+
+	// template for temp file
+	// template := filepath.Join(tmpDir, "tmp.XXXXXXXXXX")
+
+	// Create a temporary file with a random name
+	// Note: Go's ioutil.TempFile creates a file with a random name
+	// that satisfies the pattern
+	tmpFile, err := os.CreateTemp(tmpDir, "tmp.*")
+	if err != nil {
+		return -1, fmt.Errorf("failed to create temp file: %w", err)
+	}
+
+	// Get the file descriptor - in Go we work with the os.File struct
+	// but we can extract the Unix file descriptor
+	fd := int(tmpFile.Fd())
+
+	// Remove the file name from the filesystem
+	// The file remains accessible via the file descriptor
+	if err := os.Remove(tmpFile.Name()); err != nil {
+		tmpFile.Close()
+		return -1, fmt.Errorf("failed to unlink temp file: %w", err)
+	}
+
+	// Get current umask
+	// Note: syscall.Umask is not directly portable to non-Unix systems
+	oldUmask := syscall.Umask(0)
+	syscall.Umask(oldUmask) // Restore the original umask
+
+	// Change file mode according to 0666 & ~umask
+	mode := os.FileMode(0666 &^ os.FileMode(oldUmask))
+	if err := tmpFile.Chmod(mode); err != nil {
+		tmpFile.Close()
+		return -1, fmt.Errorf("failed to chmod temp file: %w", err)
+	}
+
+	// We don't close the file since we're returning the fd
+	// The caller is responsible for closing it
+
+	return fd, nil
+}
+
 // DevWrite writes data to the device
 func DevWrite(sbi *types.SuperBlkInfo, buf []byte, offset uint64, length uint64) error {
 	// Debug info
