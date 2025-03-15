@@ -41,18 +41,14 @@ type SuperBlock struct {
 	Reserved2           [23]byte // Reserved space
 }
 
-// DeviceSlot represents a slot in the device table
-type DeviceSlot struct {
-	Mapped   uint32   // Mapped blkaddr of the device
-	Blocks   uint32   // Total block count of the device
-	Reserved [8]byte  // Reserved for extension
-	Tag      [16]byte // Human readable tag (string or UUID)
-}
-
 // // BlockSize returns the block size of the filesystem
 // func (sb *SuperBlock) BlockSize() uint32 {
 // 	return 1 << sb.BlocksizeIlog
 // }
+
+func ErofsBlkSiz(sbi *SuperBlkInfo) uint32 {
+	return 1 << sbi.BlkSzBits
+}
 
 // SetFeatureCompat sets a compatible feature flag
 func (sb *SuperBlock) SetFeatureCompat(feature uint32) {
@@ -282,39 +278,6 @@ type XattrPrefixItem struct {
 // XattrLongPrefix represents a long extended attribute prefix <PPS:: See in C>
 type XattrLongPrefix struct {
 	// Add fields as needed for your implementation
-}
-
-// BufferManager manages buffer blocks
-type BufferManager struct {
-	Sbi             *SuperBlkInfo
-	MappedBuckets   [][][]ListHead
-	BlkH            BufferBlock
-	TailBlkAddr     uint32
-	MetaBlkCnt      uint32
-	LastMappedBlock *BufferBlock
-}
-
-// BufferBlock represents a buffer block
-type BufferBlock struct {
-	List       ListHead
-	MappedList ListHead
-	BlkAddr    uint32
-	Type       int
-	Buffers    BufferHead
-}
-
-// BufferHead represents a buffer head
-type BufferHead struct {
-	List      ListHead
-	Block     *BufferBlock
-	Off       uint64
-	Op        *BufferHeadOps
-	FsPrivate interface{}
-}
-
-// BufferHeadOps defines operations for buffer heads
-type BufferHeadOps struct {
-	Flush func(*BufferHead) int
 }
 
 // Initialize a new SuperBlockInfo with default values
