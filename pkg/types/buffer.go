@@ -73,6 +73,12 @@ var SkipWriteOps = &BufferHeadOps{
 	},
 }
 
+var DropDirectlyBhops = BufferHeadOps{
+	Flush: func(bh *BufferHead) int {
+		return BhFlushGenericEnd(bh)
+	},
+}
+
 // ReserveSuperblock reserves space for the superblock
 func ReserveSuperblock(bmgr *BufferManager) (*BufferHead, error) {
 	bh, err := Balloc(bmgr, META, 0, 0, 0)
@@ -342,44 +348,30 @@ func BhTell(bh *BufferHead, end bool) uint64 {
 
 // BDrop drops a buffer head
 func BDrop(bh *BufferHead, tryRevoke bool) {
-	if bh == nil {
+	bb := bh.Block
+	bmgr := bb.Buffers.FsPrivate.(*BufferManager)
+	sbi := bmgr.Sbi
+	blkaddr := bh.Block.BlkAddr
+	rollback := false
+
+	// tailBlkaddr could be rolled back after revoking all bhs
+	if tryRevoke && blkaddr != NULL_ADDR &&
+		bmgr.TailBlkAddr == blkaddr+uint32(BlkRoundUp(sbi, bb.Buffers.Off)) {
+		rollback = true
+	}
+
+	bh.Op = &DropDirectlyBhops
+	BhFlushGenericEnd(bh)
+
+	if !IsListEmpty(&bb.Buffers.List) {
 		return
 	}
 
-	bb := bh.Block
-
-	// Call flush operation if present
-	if bh.Op != nil && bh.Op.Flush != nil {
-		ret := bh.Op.Flush(bh)
-		if ret < 0 {
-			return
-		}
+	if !rollback && bb.Type != DATA {
+		bmgr.MetaBlkCnt += uint32(BlkRoundUp(sbi, bb.Buffers.Off))
 	}
-
-	if tryRevoke && bh.Off == bb.Buffers.Off {
-		// Check if the bh can be revoked - must be the last one
-		if ListIsLast(&bh.List, &bb.Buffers.List) {
-			bb.Buffers.Off = bh.Off
-			ListDel(&bh.List)
-
-			// Check if the buffer block is still in use
-			if IsListEmpty(&bb.Buffers.List) {
-				ListDel(&bb.List)
-
-				// Remove from mapped list if needed
-				if bb.BlkAddr != NULL_ADDR {
-					ListDel(&bb.MappedList)
-				}
-
-				// In Go, we rely on garbage collection instead of free()
-				bb = nil
-			}
-
-			// In Go, we rely on garbage collection
-			return
-		}
+	ErofsBfree(bb)
+	if rollback {
+		bmgr.TailBlkAddr = blkaddr
 	}
-
-	ListDel(&bh.List)
-	// Let Go's garbage collector handle the memory
 }
