@@ -112,15 +112,15 @@ func InitConfigure() *Config {
 }
 
 func DefaultOptions(sbi *SuperBlkInfo) {
-	GlobalConfig.ShowProgress = true
-	GlobalConfig.LegacyCompress = false
-	GlobalConfig.InlineData = true
-	GlobalConfig.XattrNameFilter = true
+	GCfg.ShowProgress = true
+	GCfg.LegacyCompress = false
+	GCfg.InlineData = true
+	GCfg.XattrNameFilter = true
 
 	// For MT_ENABLED equivalent in Go, we'd need to use runtime.NumCPU()
 	// Assuming you want to add this functionality:
-	GlobalConfig.MtWorkers = uint32(runtime.NumCPU())
-	GlobalConfig.MkfsSegmentSize = 16 * 1024 * 1024 // 16 MB
+	GCfg.MtWorkers = uint32(runtime.NumCPU())
+	GCfg.MkfsSegmentSize = 16 * 1024 * 1024 // 16 MB
 
 	// Set blocksize bits based on page size or max block size
 	pageSize := os.Getpagesize()
@@ -131,8 +131,8 @@ func DefaultOptions(sbi *SuperBlkInfo) {
 	sbi.BlkSzBits = uint8(math.Log2(float64(pageSize)))
 
 	// Set cluster sizes
-	GlobalConfig.MkfsPclusterSizeMax = 1 << sbi.BlkSzBits
-	GlobalConfig.MkfsPclusterSizeDef = GlobalConfig.MkfsPclusterSizeMax
+	GCfg.MkfsPclusterSizeMax = 1 << sbi.BlkSzBits
+	GCfg.MkfsPclusterSizeDef = GCfg.MkfsPclusterSizeMax
 
 	// Set features
 	sbi.FeatureIncompat = EROFS_FEATURE_INCOMPAT_ZERO_PADDING
@@ -141,9 +141,9 @@ func DefaultOptions(sbi *SuperBlkInfo) {
 }
 
 func ShowProgs(args []string) {
-	if GlobalConfig.DebugLevel >= EROFS_WARN {
+	if GCfg.DebugLevel >= EROFS_WARN {
 		programName := filepath.Base(args[0])
-		fmt.Printf("%s %s\n", programName, GlobalConfig.Version)
+		fmt.Printf("%s %s\n", programName, GCfg.Version)
 	}
 }
 
@@ -160,4 +160,4 @@ func isatty() bool {
 }
 
 // Global configuration instance
-var GlobalConfig = InitConfigure()
+var GCfg = InitConfigure()
