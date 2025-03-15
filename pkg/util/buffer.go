@@ -31,32 +31,6 @@ var SkipWriteOps = &types.BufferHeadOps{
 	},
 }
 
-// InitBufferManager initializes a new buffer manager
-func InitBufferManager(sbi *types.SuperBlkInfo, startBlock uint32) *types.BufferManager {
-	bmgr := &types.BufferManager{
-		Sbi:           sbi,
-		TailBlkAddr:   startBlock,
-		MappedBuckets: make([][][]types.ListHead, types.META+1),
-	}
-
-	// Initialize list heads
-	InitListHead(&bmgr.BlkH.List)
-	bmgr.BlkH.BlkAddr = 0xFFFFFFFF // NULL_ADDR
-	bmgr.LastMappedBlock = &bmgr.BlkH
-
-	// Initialize mapped buckets
-	for i := 0; i <= types.META; i++ {
-		bmgr.MappedBuckets[i] = make([][]types.ListHead, types.EROFS_MAX_BLOCK_SIZE)
-		for j := 0; j < int(types.EROFS_MAX_BLOCK_SIZE); j++ {
-			bmgr.MappedBuckets[i][j] = make([]types.ListHead, 0)
-			// Initialize each list head
-			// This is a placeholder - you'll need to implement proper list initialization
-		}
-	}
-
-	return bmgr
-}
-
 // ReserveSuperblock reserves space for the superblock
 func ReserveSuperblock(bmgr *types.BufferManager) (*types.BufferHead, error) {
 	bh, err := Balloc(bmgr, types.META, 0, 0, 0)
@@ -231,9 +205,9 @@ func MapBh(bmgr *types.BufferManager, bb *types.BufferBlock) uint32 {
 	} else {
 		// Walk backward to reuse free block slots
 		bucketIndex := blkSize % uint64(len(bmgr.MappedBuckets[0]))
-		head := bmgr.MappedBuckets[bb.Type][bucketIndex][0].Prev
+		head := bmgr.MappedBuckets[bb.Type][bucketIndex].Prev
 
-		if head != &bmgr.MappedBuckets[bb.Type][bucketIndex][0] {
+		if head != &bmgr.MappedBuckets[bb.Type][bucketIndex] {
 			tInterface := ContainerOf(head, &types.BufferBlock{}, "MappedList")
 			t, ok := tInterface.(*types.BufferBlock)
 			if !ok {
@@ -253,7 +227,7 @@ func MapBh(bmgr *types.BufferManager, bb *types.BufferBlock) uint32 {
 
 	// Add to mapped bucket
 	bucketIndex := blkSize % uint64(len(bmgr.MappedBuckets[0]))
-	ListAdd(&bb.MappedList, &bmgr.MappedBuckets[bb.Type][bucketIndex][0])
+	ListAdd(&bb.MappedList, &bmgr.MappedBuckets[bb.Type][bucketIndex])
 	bmgr.LastMappedBlock = bb
 
 	return blkAddr
