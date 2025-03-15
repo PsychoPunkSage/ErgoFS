@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -207,133 +206,133 @@ func (i *ErofsInode) SetRoot() {
 
 // ErofsReadInodeFromDisk reads an inode from disk and fills the in-memory inode structure
 func ErofsReadInodeFromDisk(vi *ErofsInode) error {
-	var ret int64
-	var ifmt uint16
+	// var ret int64
+	// var ifmt uint16
 
-	DBG_BUGON(vi.Sbi == nil)
-	inodeLoc := erofsIloc(vi)
+	// DBG_BUGON(vi.Sbi == nil)
+	// inodeLoc := erofsIloc(vi)
 
-	// Create buffer for reading inode data
-	buf := make([]byte, binary.Size(ErofsInodeExtended{}))
+	// // Create buffer for reading inode data
+	// buf := make([]byte, binary.Size(ErofsInodeExtended{}))
 
-	// Read the compact inode first (which is always the first part)
-	ret, _ = ErofsDevRead(vi.Sbi, 0, buf, inodeLoc, int64(binary.Size(ErofsInodeCompact{})))
-	if ret < 0 {
-		return fmt.Errorf("failed to read compact inode: %w", syscall.Errno(-ret))
-	}
+	// // Read the compact inode first (which is always the first part)
+	// ret, _ = ErofsDevRead(vi.Sbi, 0, buf, inodeLoc, int64(binary.Size(ErofsInodeCompact{})))
+	// if ret < 0 {
+	// 	return fmt.Errorf("failed to read compact inode: %w", syscall.Errno(-ret))
+	// }
 
-	// Parse compact inode format
-	var dic *ErofsInodeCompact = (*ErofsInodeCompact)(unsafe.Pointer(&buf[0]))
-	// In Go, we need to manually decode the binary data
-	// This is a simplified version - in practice, you'd use binary.Read or a struct decoder
-	ifmt = dic.IFormat
+	// // Parse compact inode format
+	// var dic *ErofsInodeCompact = (*ErofsInodeCompact)(unsafe.Pointer(&buf[0]))
+	// // In Go, we need to manually decode the binary data
+	// // This is a simplified version - in practice, you'd use binary.Read or a struct decoder
+	// ifmt = dic.IFormat
 
 	// Set datalayout
-	vi.DataLayout = ErofsInodeDatalayout(ifmt)
-	if vi.DataLayout >= EROFS_INODE_DATALAYOUT_MAX {
-		return fmt.Errorf("unsupported datalayout %d of nid %d: %w",
-			vi.DataLayout, vi.Nid, syscall.Errno(EOPNOTSUPP))
-	}
+	// vi.DataLayout = ErofsInodeDatalayout(ifmt)
+	// if vi.DataLayout >= EROFS_INODE_DATALAYOUT_MAX {
+	// 	return fmt.Errorf("unsupported datalayout %d of nid %d: %w",
+	// 		vi.DataLayout, vi.Nid, syscall.Errno(EOPNOTSUPP))
+	// }
 
-	// Process based on inode version
-	switch ErofsInodeVersion(ifmt) {
-	case EROFS_INODE_LAYOUT_EXTENDED:
-		vi.InodeIsize = uint8(binary.Size(ErofsInodeExtended{}))
+	// // Process based on inode version
+	// switch ErofsInodeVersion(ifmt) {
+	// case EROFS_INODE_LAYOUT_EXTENDED:
+	// 	vi.InodeIsize = uint8(binary.Size(ErofsInodeExtended{}))
 
-		// Read the rest of the extended inode
-		ret, _ = ErofsDevRead(vi.Sbi, 0, buf[binary.Size(ErofsInodeCompact{}):],
-			inodeLoc+uint64(binary.Size(ErofsInodeCompact{})),
-			int64(binary.Size(ErofsInodeExtended{})-binary.Size(ErofsInodeCompact{})))
-		if ret < 0 {
-			return fmt.Errorf("failed to read extended inode: %w", syscall.Errno(-ret))
-		}
+	// 	// Read the rest of the extended inode
+	// 	ret, _ = ErofsDevRead(vi.Sbi, 0, buf[binary.Size(ErofsInodeCompact{}):],
+	// 		inodeLoc+uint64(binary.Size(ErofsInodeCompact{})),
+	// 		int64(binary.Size(ErofsInodeExtended{})-binary.Size(ErofsInodeCompact{})))
+	// 	if ret < 0 {
+	// 		return fmt.Errorf("failed to read extended inode: %w", syscall.Errno(-ret))
+	// 	}
 
-		// Parse extended inode data
-		var die *ErofsInodeExtended = (*ErofsInodeExtended)(unsafe.Pointer(&buf[0]))
-		// In practice, you'd use binary.Read for proper decoding
-		// This is a simplified version that assumes the buffer contains valid data
+	// 	// Parse extended inode data
+	// 	var die *ErofsInodeExtended = (*ErofsInodeExtended)(unsafe.Pointer(&buf[0]))
+	// 	// In practice, you'd use binary.Read for proper decoding
+	// 	// This is a simplified version that assumes the buffer contains valid data
 
-		// Extract fields from extended inode (die)
-		vi.XattrIsize = ErofsXattrIbodySize(binary.LittleEndian.Uint16(buf[2:4])) // i_xattr_icount
-		vi.IMode = die.IMode                                                      // i_mode
-		vi.IIno[0] = uint64(die.IIno)                                             // i_ino
+	// 	// Extract fields from extended inode (die)
+	// 	vi.XattrIsize = ErofsXattrIbodySize(binary.LittleEndian.Uint16(buf[2:4])) // i_xattr_icount
+	// 	vi.IMode = die.IMode                                                      // i_mode
+	// 	vi.IIno[0] = uint64(die.IIno)                                             // i_ino
 
-		// Handle different file types
-		switch vi.IMode & S_IFMT {
-		case S_IFREG, S_IFDIR, S_IFLNK:
-			vi.IBlkaddr = binary.LittleEndian.Uint32(buf[32:36]) // raw_blkaddr
-		case S_IFCHR, S_IFBLK:
-			vi.IRdev = ErofsNewDecodeDev(binary.LittleEndian.Uint32(buf[36:40])) // rdev
-		case S_IFIFO, S_IFSOCK:
-			vi.IRdev = 0
-		default:
-			return fmt.Errorf("bogus i_mode (%o) @ nid %d: %w", vi.IMode, vi.Nid, syscall.Errno(EFSCORRUPTED))
-		}
+	// 	// Handle different file types
+	// 	switch vi.IMode & S_IFMT {
+	// 	case S_IFREG, S_IFDIR, S_IFLNK:
+	// 		vi.IBlkaddr = binary.LittleEndian.Uint32(buf[32:36]) // raw_blkaddr
+	// 	case S_IFCHR, S_IFBLK:
+	// 		vi.IRdev = ErofsNewDecodeDev(binary.LittleEndian.Uint32(buf[36:40])) // rdev
+	// 	case S_IFIFO, S_IFSOCK:
+	// 		vi.IRdev = 0
+	// 	default:
+	// 		return fmt.Errorf("bogus i_mode (%o) @ nid %d: %w", vi.IMode, vi.Nid, syscall.Errno(EFSCORRUPTED))
+	// 	}
 
-		// Fill other fields from extended inode
-		vi.IUid = die.IUid             // i_uid
-		vi.IGid = die.IGid             // i_gid
-		vi.INlink = die.INlink         // i_nlink
-		vi.IMtime = die.IMTime         // i_mtime
-		vi.IMtimeNsec = die.IMTimeNsec // i_mtime_nsec
-		vi.ISize = die.ISize           // i_size
+	// 	// Fill other fields from extended inode
+	// 	vi.IUid = die.IUid             // i_uid
+	// 	vi.IGid = die.IGid             // i_gid
+	// 	vi.INlink = die.INlink         // i_nlink
+	// 	vi.IMtime = die.IMTime         // i_mtime
+	// 	vi.IMtimeNsec = die.IMTimeNsec // i_mtime_nsec
+	// 	vi.ISize = die.ISize           // i_size
 
-		// Fill chunk format for chunk-based inodes
-		if vi.DataLayout == EROFS_INODE_CHUNK_BASED {
-			vi.ChunkFormat = die.IU.ChunkInfo.Format // c.format
-		}
+	// 	// Fill chunk format for chunk-based inodes
+	// 	if vi.DataLayout == EROFS_INODE_CHUNK_BASED {
+	// 		vi.ChunkFormat = die.IU.ChunkInfo.Format // c.format
+	// 	}
 
-	case EROFS_INODE_LAYOUT_COMPACT:
-		vi.InodeIsize = uint8(binary.Size(ErofsInodeCompact{}))
+	// case EROFS_INODE_LAYOUT_COMPACT:
+	// 	vi.InodeIsize = uint8(binary.Size(ErofsInodeCompact{}))
 
-		// Parse compact inode fields
-		// In practice, you'd use binary.Read for proper decoding
-		vi.XattrIsize = ErofsXattrIbodySize(dic.IXattrIcount) // i_xattr_icount
-		vi.IMode = dic.IMode                                  // i_mode
-		vi.IIno[0] = uint64(dic.IIno)                         // i_ino
+	// 	// Parse compact inode fields
+	// 	// In practice, you'd use binary.Read for proper decoding
+	// 	vi.XattrIsize = ErofsXattrIbodySize(dic.IXattrIcount) // i_xattr_icount
+	// 	vi.IMode = dic.IMode                                  // i_mode
+	// 	vi.IIno[0] = uint64(dic.IIno)                         // i_ino
 
-		// Handle different file types
-		switch vi.IMode & S_IFMT {
-		case S_IFREG, S_IFDIR, S_IFLNK:
-			vi.IBlkaddr = dic.IU.RawBlkAddr // raw_blkaddr
-		case S_IFCHR, S_IFBLK:
-			vi.IRdev = ErofsNewDecodeDev(dic.IU.Rdev) // rdev
-		case S_IFIFO, S_IFSOCK:
-			vi.IRdev = 0
-		default:
-			return fmt.Errorf("bogus i_mode (%o) @ nid %d: %w", vi.IMode, vi.Nid, syscall.Errno(EFSCORRUPTED))
-		}
+	// 	// Handle different file types
+	// 	switch vi.IMode & S_IFMT {
+	// 	case S_IFREG, S_IFDIR, S_IFLNK:
+	// 		vi.IBlkaddr = dic.IU.RawBlkAddr // raw_blkaddr
+	// 	case S_IFCHR, S_IFBLK:
+	// 		vi.IRdev = ErofsNewDecodeDev(dic.IU.Rdev) // rdev
+	// 	case S_IFIFO, S_IFSOCK:
+	// 		vi.IRdev = 0
+	// 	default:
+	// 		return fmt.Errorf("bogus i_mode (%o) @ nid %d: %w", vi.IMode, vi.Nid, syscall.Errno(EFSCORRUPTED))
+	// 	}
 
-		// Fill other fields from compact inode
-		vi.IUid = uint32(dic.IUid)     // i_uid
-		vi.IGid = uint32(dic.IGid)     // i_gid
-		vi.INlink = uint32(dic.INlink) // i_nlink
+	// 	// Fill other fields from compact inode
+	// 	vi.IUid = uint32(dic.IUid)     // i_uid
+	// 	vi.IGid = uint32(dic.IGid)     // i_gid
+	// 	vi.INlink = uint32(dic.INlink) // i_nlink
 
-		// Use superblock build time for compact inodes
-		vi.IMtime = vi.Sbi.BuildTime
-		vi.IMtimeNsec = vi.Sbi.BuildTimeNsec
+	// 	// Use superblock build time for compact inodes
+	// 	vi.IMtime = vi.Sbi.BuildTime
+	// 	vi.IMtimeNsec = vi.Sbi.BuildTimeNsec
 
-		vi.ISize = uint64(dic.ISize) // i_size
+	// 	vi.ISize = uint64(dic.ISize) // i_size
 
-		// Fill chunk format for chunk-based inodes
-		if vi.DataLayout == EROFS_INODE_CHUNK_BASED {
-			vi.ChunkFormat = dic.IU.ChunkInfo.Format // c.format
-		}
+	// 	// Fill chunk format for chunk-based inodes
+	// 	if vi.DataLayout == EROFS_INODE_CHUNK_BASED {
+	// 		vi.ChunkFormat = dic.IU.ChunkInfo.Format // c.format
+	// 	}
 
-	default:
-		return fmt.Errorf("unsupported on-disk inode version %d of nid %d: %w",
-			ErofsInodeVersion(ifmt), vi.Nid, syscall.Errno(EOPNOTSUPP))
-	}
+	// default:
+	// 	return fmt.Errorf("unsupported on-disk inode version %d of nid %d: %w",
+	// 		ErofsInodeVersion(ifmt), vi.Nid, syscall.Errno(EOPNOTSUPP))
+	// }
 
-	// Set flags and handle chunk-based inodes
-	vi.Flags = 0
-	if vi.DataLayout == EROFS_INODE_CHUNK_BASED {
-		if uint32(vi.ChunkFormat)&^EROFS_CHUNK_FORMAT_ALL != 0 {
-			return fmt.Errorf("unsupported chunk format %x of nid %d: %w",
-				vi.ChunkFormat, vi.Nid, syscall.Errno(EOPNOTSUPP))
-		}
-		vi.ChunkBits = uint8(uint32(vi.Sbi.BlkSzBits) + (uint32(vi.ChunkFormat) & EROFS_CHUNK_FORMAT_BLKBITS_MASK))
-	}
+	// // Set flags and handle chunk-based inodes
+	// vi.Flags = 0
+	// if vi.DataLayout == EROFS_INODE_CHUNK_BASED {
+	// 	if uint32(vi.ChunkFormat)&^EROFS_CHUNK_FORMAT_ALL != 0 {
+	// 		return fmt.Errorf("unsupported chunk format %x of nid %d: %w",
+	// 			vi.ChunkFormat, vi.Nid, syscall.Errno(EOPNOTSUPP))
+	// 	}
+	// 	vi.ChunkBits = uint8(uint32(vi.Sbi.BlkSzBits) + (uint32(vi.ChunkFormat) & EROFS_CHUNK_FORMAT_BLKBITS_MASK))
+	// }
 
 	return nil
 }
@@ -371,38 +370,38 @@ func InitPackedFile(sbi *SuperBlkInfo, fragmentsMkfs bool) error {
 	}
 	epi.Fd = tmpFile
 
-	// Handle existing fragments if needed
-	if HasFeature(sbi, "fragments") && sbi.PackedNid > 0 {
-		// Create a temporary inode to read from disk
-		ei := &ErofsInode{
-			Sbi: sbi,
-			Nid: sbi.PackedNid,
-		}
+	// // Handle existing fragments if needed
+	// if HasFeature(sbi, "fragments") && sbi.PackedNid > 0 {
+	// 	// Create a temporary inode to read from disk
+	// 	ei := &ErofsInode{
+	// 		Sbi: sbi,
+	// 		Nid: sbi.PackedNid,
+	// 	}
 
-		// Read the inode from disk
-		err = ReadInodeFromDisk(ei)
-		if err != nil {
-			Debug(EROFS_ERR, "failed to read packed inode from disk: %v", err)
-			// ExitPackedFile(sbi)
-			return err
-		}
+	// 	// Read the inode from disk
+	// 	err = ReadInodeFromDisk(ei)
+	// 	if err != nil {
+	// 		Debug(EROFS_ERR, "failed to read packed inode from disk: %v", err)
+	// 		// ExitPackedFile(sbi)
+	// 		return err
+	// 	}
 
-		// Seek to the end of existing data
-		offset, err := epi.Fd.Seek(ei.Size, os.SEEK_SET)
-		if err != nil {
-			// ExitPackedFile(sbi)
-			return fmt.Errorf("failed to seek in packed file: %v", err)
-		}
+	// 	// Seek to the end of existing data
+	// 	offset, err := epi.Fd.Seek(ei.Size, os.SEEK_SET)
+	// 	if err != nil {
+	// 		// ExitPackedFile(sbi)
+	// 		return fmt.Errorf("failed to seek in packed file: %v", err)
+	// 	}
 
-		if offset < 0 {
-			// ExitPackedFile(sbi)
-			return fmt.Errorf("invalid offset in packed file")
-		}
+	// 	if offset < 0 {
+	// 		// ExitPackedFile(sbi)
+	// 		return fmt.Errorf("invalid offset in packed file")
+	// 	}
 
-		// Calculate uptodate bitmap size and allocate
-		epi.UptodateSize = BlockRoundUp(sbi, ei.Size) / 8
-		epi.UptoDate = make([]byte, epi.UptoDateSize)
-	}
+	// 	// Calculate uptodate bitmap size and allocate
+	// 	epi.UptodateSize = BlockRoundUp(sbi, ei.Size) / 8
+	// 	epi.UptoDate = make([]byte, epi.UptoDateSize)
+	// }
 
 	return nil
 }
