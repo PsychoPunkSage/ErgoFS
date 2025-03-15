@@ -7,7 +7,7 @@ import (
 
 // Debug prints a message if the debug level is high enough
 func Debug(level int, format string, args ...interface{}) {
-	if level <= GlobalConfig.DebugLevel {
+	if level <= GCfg.DebugLevel {
 		fmt.Fprintf(os.Stderr, format+"\n", args...)
 	}
 }

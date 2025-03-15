@@ -264,7 +264,7 @@ func BattachInternal(bb *BufferBlock, bh *BufferHead, incr uint64,
 			next, _ := nextInterface.(*BufferBlock)
 
 			if next.BlkAddr != NULL_ADDR {
-				return EINVAL
+				return -EINVAL
 			}
 		}
 
@@ -274,7 +274,7 @@ func BattachInternal(bb *BufferBlock, bh *BufferHead, incr uint64,
 				uint32(BlkRoundUp(sbi, boff)))
 
 			if oob > 0 && !tailupdate {
-				return EINVAL
+				return -EINVAL
 			}
 		}
 	}
