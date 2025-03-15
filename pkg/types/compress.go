@@ -1,15 +1,17 @@
 package types
 
 import (
-	"errors"
+	"encoding/binary"
 	"fmt"
+	"math/bits"
+	"unsafe"
 )
 
 // import "cosmossdk.io/errors"
 
 // "github.com/PsychoPunkSage/ErgoFS/pkg/types/compressor"
 
-var zErofsMtEnabled bool
+// var zErofsMtEnabled bool
 
 type ErofsAlgorithm struct {
 	Name      string
@@ -47,6 +49,32 @@ type ErofsCompressCfg struct {
 	Handle        ErofsCompress
 	AlgorithmType uint
 	Enable        bool
+}
+
+type ZErofsLz4Cfgs struct {
+	MaxDistance     uint16
+	MaxPclusterBlks uint16
+	Reserved        [10]byte
+}
+
+// ZErofsLzmaCfgs corresponds to the LZMA compression configuration (16 bytes total)
+type ZErofsLzmaCfgs struct {
+	DictSize uint32
+	Format   uint16
+	Reserved [8]byte
+}
+
+// ZErofsDeflateCfgs corresponds to the Deflate compression configuration (8 bytes total)
+type ZErofsDeflateCfgs struct {
+	WindowBits uint8
+	Reserved   [5]byte
+}
+
+// ZErofsZstdCfgs corresponds to the ZSTD compression configuration (8 bytes total)
+type ZErofsZstdCfgs struct {
+	Format    uint8
+	WindowLog uint8
+	Reserved  [4]byte
 }
 
 var ErofsCCfg [EROFS_MAX_COMPR_CFGS]ErofsCompressCfg
@@ -167,6 +195,147 @@ func ZErofsCompressInit(sbi *SuperBlkInfo, sbBh *BufferHead) int {
 	return 0
 }
 
+// ZErofsBuildComprCfgs builds compression configurations
+func ZErofsBuildComprCfgs(sbi *SuperBlkInfo, sbBh *BufferHead, maxDictSize []uint32) int {
+	bh := sbBh
+	ret := 0
+
+	// Process LZ4 compression if available
+	if sbi.AvailableComprAlgs&(1<<Z_EROFS_COMPRESSION_LZ4) != 0 {
+		// Create LZ4 configuration structure
+		type Lz4AlgConfig struct {
+			Size uint16
+			Lz4  ZErofsLz4Cfgs
+		}
+
+		lz4alg := Lz4AlgConfig{
+			Size: uint16(unsafe.Sizeof(ZErofsLz4Cfgs{})),
+			Lz4: ZErofsLz4Cfgs{
+				MaxDistance:     sbi.Lz4.MaxDistance,
+				MaxPclusterBlks: uint16(GCfg.MkfsPclusterSizeMax >> sbi.BlkSzBits),
+			},
+		}
+
+		// Convert to little endian
+		lz4algBytes := make([]byte, unsafe.Sizeof(lz4alg))
+		binary.LittleEndian.PutUint16(lz4algBytes[0:2], lz4alg.Size)
+		binary.LittleEndian.PutUint16(lz4algBytes[2:4], lz4alg.Lz4.MaxDistance)
+		lz4algBytes[4] = byte(lz4alg.Lz4.MaxPclusterBlks)
+
+		// Attach buffer
+		bh, err := Battach(bh, META, uint32(len(lz4algBytes)))
+		if err < 0 {
+			// error.New()
+			return err
+		}
+
+		// Map and write data
+		MapBh(nil, bh.Block)
+		ret = ErofsDevWrite(sbi, lz4algBytes, BhTell(bh, false), len(lz4algBytes))
+		bh.Op = &DropDirectlyBhops
+	}
+
+	// Process LZMA compression if available
+	HaveLibLZMA := false // PPS: REMOVE
+	if HaveLibLZMA && sbi.AvailableComprAlgs&(1<<Z_EROFS_COMPRESSION_LZMA) != 0 {
+		// Create LZMA configuration structure
+		type LzmaAlgConfig struct {
+			Size uint16
+			Lzma ZErofsLzmaCfgs
+		}
+
+		lzmaalg := LzmaAlgConfig{
+			Size: uint16(unsafe.Sizeof(ZErofsLzmaCfgs{})),
+			Lzma: ZErofsLzmaCfgs{
+				DictSize: maxDictSize[Z_EROFS_COMPRESSION_DEFLATE],
+			},
+		}
+
+		// Convert to little endian
+		lzmaalgBytes := make([]byte, unsafe.Sizeof(lzmaalg))
+		binary.LittleEndian.PutUint16(lzmaalgBytes[0:2], lzmaalg.Size)
+		binary.LittleEndian.PutUint32(lzmaalgBytes[2:6], lzmaalg.Lzma.DictSize)
+
+		// Attach buffer
+		bh, err := Battach(bh, META, uint32(len(lzmaalgBytes)))
+		if err < 0 {
+			return err
+		}
+
+		// Map and write data
+		MapBh(nil, bh.Block)
+		ret = ErofsDevWrite(sbi, lzmaalgBytes, BhTell(bh, false), len(lzmaalgBytes))
+		bh.Op = &DropDirectlyBhops
+	}
+
+	// Process DEFLATE compression if available
+	if sbi.AvailableComprAlgs&(1<<Z_EROFS_COMPRESSION_DEFLATE) != 0 {
+		// Create DEFLATE configuration structure
+		type DeflateAlgConfig struct {
+			Size uint16
+			Z    ZErofsDeflateCfgs
+		}
+
+		zalg := DeflateAlgConfig{
+			Size: uint16(unsafe.Sizeof(ZErofsDeflateCfgs{})),
+			Z: ZErofsDeflateCfgs{
+				WindowBits: uint8(bits.TrailingZeros32(maxDictSize[Z_EROFS_COMPRESSION_DEFLATE])),
+			},
+		}
+
+		// Convert to little endian
+		zalgBytes := make([]byte, unsafe.Sizeof(zalg))
+		binary.LittleEndian.PutUint16(zalgBytes[0:2], zalg.Size)
+		binary.LittleEndian.PutUint32(zalgBytes[2:6], uint32(zalg.Z.WindowBits))
+
+		// Attach buffer
+		bh, err := Battach(bh, META, uint32(len(zalgBytes)))
+		if err < 0 {
+			return err
+		}
+
+		// Map and write data
+		MapBh(nil, bh.Block)
+		ret = ErofsDevWrite(sbi, zalgBytes, BhTell(bh, false), len(zalgBytes))
+		bh.Op = &DropDirectlyBhops
+	}
+
+	// Process ZSTD compression if available
+	HaveLibZSTD := false // PPS:: Remove
+	if HaveLibZSTD && sbi.AvailableComprAlgs&(1<<Z_EROFS_COMPRESSION_ZSTD) != 0 {
+		// Create ZSTD configuration structure
+		type ZstdAlgConfig struct {
+			Size uint16
+			Z    ZErofsZstdCfgs
+		}
+
+		zalg := ZstdAlgConfig{
+			Size: uint16(unsafe.Sizeof(ZErofsZstdCfgs{})),
+			Z: ZErofsZstdCfgs{
+				WindowLog: uint8(bits.TrailingZeros32(maxDictSize[Z_EROFS_COMPRESSION_ZSTD]) - 10),
+			},
+		}
+
+		// Convert to little endian
+		zalgBytes := make([]byte, unsafe.Sizeof(zalg))
+		binary.LittleEndian.PutUint16(zalgBytes[0:2], zalg.Size)
+		zalgBytes[2] = zalg.Z.WindowLog
+
+		// Attach buffer
+		bh, err := Battach(bh, META, uint32(len(zalgBytes)))
+		if err < 0 {
+			return err
+		}
+
+		// Map and write data
+		MapBh(nil, bh.Block)
+		ret = ErofsDevWrite(sbi, zalgBytes, BhTell(bh, false), len(zalgBytes))
+		bh.Op = &DropDirectlyBhops
+	}
+
+	return ret
+}
+
 func zErofsGetCompressAlgorithmID(c *ErofsCompress) (uint, error) {
 	if c == nil || c.Alg == nil {
 		return 0, fmt.Errorf("invalid compressor: algorithm is nil")
@@ -242,26 +411,25 @@ func erofsCompressorInit(sbi *SuperBlkInfo, c *ErofsCompress,
 		if erofsAlgs[i].C.SetLevel != nil {
 			ret = erofsAlgs[i].C.SetLevel(c, compressionLevel)
 			if ret != 0 {
-				errors.New(fmt.Sprintf("failed to set compression level %d for %s",
-					compressionLevel, algName))
+				// errors.New(fmt.Sprintf("failed to set compression level %d for %s",
+				// 	compressionLevel, algName))
 				return ret
 			}
 		} else if compressionLevel >= 0 {
-			errors.New(fmt.Sprintf("compression level %d is not supported for %s",
-				compressionLevel, algName))
+			// errors.New(fmt.Sprintf("compression level %d is not supported for %s",
+			// 	compressionLevel, algName))
 			return -EINVAL
 		}
 
 		if erofsAlgs[i].C.SetDictSize != nil {
 			ret = erofsAlgs[i].C.SetDictSize(c, dictSize)
 			if ret != 0 {
-				errors.New(fmt.Sprintf("failed to set dict size %u for %s",
-					dictSize, algName))
+				// fmt.Errorf("failed to set dict size %d for %s", dictSize, algName)
 				return ret
 			}
 		} else if dictSize > 0 {
-			errors.New(fmt.Sprintf("dict size is not supported for %s",
-				algName))
+			// errors.New(fmt.Sprintf("dict size is not supported for %s",
+			// 	algName))
 			return -EINVAL
 		}
 
@@ -275,6 +443,6 @@ func erofsCompressorInit(sbi *SuperBlkInfo, c *ErofsCompress,
 		return 0
 	}
 
-	errors.New(fmt.Sprintf("Cannot find a valid compressor %s", algName))
+	// errors.New(fmt.Sprintf("Cannot find a valid compressor %s", algName))
 	return ret
 }
