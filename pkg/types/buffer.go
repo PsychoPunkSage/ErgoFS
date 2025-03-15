@@ -259,6 +259,34 @@ func Balloc(bmgr *BufferManager, bufType int, size uint64, requiredExt, inlineEx
 	return bh, nil
 }
 
+// Battach attaches a new buffer head to an existing one
+func Battach(bh *BufferHead, bufType int, size uint32) (*BufferHead, int) {
+	bb := bh.Block
+	bmgr := bb.Buffers.FsPrivate.(*BufferManager)
+
+	// Get alignment size based on buffer type
+	alignsize, _ := GetAlignSize(bmgr.Sbi, bufType)
+
+	// Should be the tail bh in the corresponding buffer block
+	if bh.List.Next != &bb.Buffers.List {
+		return nil, -EINVAL
+	}
+
+	// Allocate new buffer head
+	nbh := new(BufferHead)
+	// if nbh == nil {
+	// 	return nil, -ENOMEM
+	// }
+
+	// Attach the new buffer head
+	err := BattachInternal(bb, nbh, uint64(size), uint32(alignsize), 0, false)
+	if err < 0 {
+		return nil, err
+	}
+
+	return nbh, 0
+}
+
 // BhBalloon expands a buffer head
 func BhBalloon(bh *BufferHead, incr uint64) int {
 	block := bh.Block
