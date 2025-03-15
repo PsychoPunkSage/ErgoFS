@@ -322,6 +322,25 @@ const (
 	S_IFSOCK = 0140000 /* Socket.  */
 )
 
+// Flags for getRandom
+const (
+	GRND_NONBLOCK = 0x01
+	GRND_RANDOM   = 0x02
+	GRND_INSECURE = 0x04
+)
+
+const (
+	Z_EROFS_COMPRESSION_LZ4 = iota
+	Z_EROFS_COMPRESSION_LZMA
+	Z_EROFS_COMPRESSION_DEFLATE
+	Z_EROFS_COMPRESSION_ZSTD
+	Z_EROFS_COMPRESSION_MAX
+)
+
+const (
+	LZ4_DISTANCE_MAX = 65535
+)
+
 // FRAGMENT_HASH computes the hash for a fragment
 func FRAGMENT_HASH(c uint) uint {
 	return c & (FRAGMENT_HASHSIZE - 1)
@@ -354,5 +373,7 @@ type ErofsBlkT uint32
 // #define EROFS_XATTR_ALIGN(size) round_up(size, sizeof(struct erofs_xattr_entry))
 // #define EROFS_BLOCK_MAP_ENTRY_SIZE	sizeof(__le32)
 // #define Z_EROFS_ALL_COMPR_ALGS		((1 << Z_EROFS_COMPRESSION_MAX) - 1)
-// #define Z_EROFS_LZMA_MAX_DICT_SIZE	(8 * Z_EROFS_PCLUSTER_MAX_SIZE)
+const Z_EROFS_LZMA_MAX_DICT_SIZE = (8 * Z_EROFS_PCLUSTER_MAX_SIZE)
+const Z_EROFS_ZSTD_MAX_DICT_SIZE = Z_EROFS_PCLUSTER_MAX_SIZE
+
 // #define Z_EROFS_FULL_INDEX_ALIGN(end)	\	(round_up(end, 8) + sizeof(struct z_erofs_map_header) + 8)
