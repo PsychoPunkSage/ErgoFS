@@ -55,9 +55,14 @@ func __ListDel(prev *ListHead, next *ListHead) {
 	next.Prev = prev
 }
 
-// ListEmpty returns true if the list is empty
-func ListEmpty(head *ListHead) bool {
-	return head.Next == head
+// ListIsLast checks if an entry is the last one
+func ListIsLast(list, head *ListHead) bool {
+	return list.Next == head
+}
+
+// IsListEmpty checks if a list is empty
+func IsListEmpty(list *ListHead) bool {
+	return list.Next == list
 }
 
 // __ListSplice joins two lists
@@ -74,49 +79,9 @@ func __ListSplice(list *ListHead, prev *ListHead, next *ListHead) {
 
 // ListSpliceTail joins two lists at the end
 func ListSpliceTail(list *ListHead, head *ListHead) {
-	if !ListEmpty(list) {
+	if !IsListEmpty(list) {
 		__ListSplice(list, head.Prev, head)
 	}
-}
-
-// ContainerOf is a helper to get the containing struct from a member
-func ContainerOf(ptr, typ interface{}, member string) interface{} {
-	ptrVal := reflect.ValueOf(ptr)
-	if ptrVal.Kind() != reflect.Ptr {
-		panic("ContainerOf: ptr must be a pointer")
-	}
-
-	// Get the type of the container
-	containerType := reflect.TypeOf(typ)
-	if containerType.Kind() != reflect.Struct {
-		panic("ContainerOf: typ must be a struct")
-	}
-
-	// Find the field in the struct
-	var field reflect.StructField
-	for i := 0; i < containerType.NumField(); i++ {
-		if containerType.Field(i).Name == member {
-			field = containerType.Field(i)
-			break
-		}
-	}
-
-	if field.Name == "" {
-		panic("ContainerOf: member not found in struct")
-	}
-
-	// Calculate the offset of the member in the struct
-	memberOffset := field.Offset
-
-	// Calculate the address of the container
-	ptrAddr := ptrVal.Pointer()
-	containerAddr := ptrAddr - memberOffset
-
-	// Create a new container struct and set its address
-	containerPtr := reflect.New(containerType).Interface()
-	*(*uintptr)(unsafe.Pointer(&containerPtr)) = containerAddr
-
-	return containerPtr
 }
 
 // ListEntry is a macro replacement to get the struct containing a list head
@@ -273,4 +238,44 @@ func ForEachEntrySafe(head *ListHead, container interface{}, member string, f fu
 
 		pos = n
 	}
+}
+
+// ContainerOf is a helper to get the containing struct from a member
+func ContainerOf(ptr, typ interface{}, member string) interface{} {
+	ptrVal := reflect.ValueOf(ptr)
+	if ptrVal.Kind() != reflect.Ptr {
+		panic("ContainerOf: ptr must be a pointer")
+	}
+
+	// Get the type of the container
+	containerType := reflect.TypeOf(typ)
+	if containerType.Kind() != reflect.Struct {
+		panic("ContainerOf: typ must be a struct")
+	}
+
+	// Find the field in the struct
+	var field reflect.StructField
+	for i := 0; i < containerType.NumField(); i++ {
+		if containerType.Field(i).Name == member {
+			field = containerType.Field(i)
+			break
+		}
+	}
+
+	if field.Name == "" {
+		panic("ContainerOf: member not found in struct")
+	}
+
+	// Calculate the offset of the member in the struct
+	memberOffset := field.Offset
+
+	// Calculate the address of the container
+	ptrAddr := ptrVal.Pointer()
+	containerAddr := ptrAddr - memberOffset
+
+	// Create a new container struct and set its address
+	containerPtr := reflect.New(containerType).Interface()
+	*(*uintptr)(unsafe.Pointer(&containerPtr)) = containerAddr
+
+	return containerPtr
 }
