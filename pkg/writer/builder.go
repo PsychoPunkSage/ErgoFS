@@ -14,6 +14,17 @@ func WriteSuperblock(sbi *types.SuperBlkInfo, sbBh *types.BufferHead, blocks *ui
 	// Map the buffer to get the block address
 	*blocks = util.MapBh(sbi.Bmgr, nil)
 
+	// Ensure TotalBlocks is at least the current tail block address
+	// This is important as the tail block address represents the next block to allocate
+	if sbi.TotalBlocks < uint64(sbi.Bmgr.TailBlkAddr) {
+		sbi.TotalBlocks = uint64(sbi.Bmgr.TailBlkAddr)
+	}
+	// Add 1 for the superblock itself if it's not already counted
+	if sbi.TotalBlocks == 0 {
+		sbi.TotalBlocks = 1
+	}
+	types.Debug(types.EROFS_DBG, "Total blocks in filesystem: %d", sbi.TotalBlocks)
+
 	// Generate the superblock buffer
 	sbBuf, err := sbi.WriteSuperblock()
 	if err != nil {

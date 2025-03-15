@@ -249,7 +249,52 @@ Filesystem total metadata blocks: 1
 Filesystem total deduplicated bytes (of source files): 0
 ```
 
-</details>
+</details><br>
+
+| Function Call                                 | Purpose                           | Reason                                                                  |
+| --------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------- |
+| - [X] `erofs_init_configure()`                | Initializes the configuration     | Sets up the global configuration environment before parsing any options |
+| - [X] `erofs_mkfs_default_options()`          | Sets default options              | Establishes baseline configuration values before command-line overrides |
+| - [ ] `mkfs_parse_options_cfg()`              | Parses command-line options       | Processes user-provided parameters to customize the filesystem creation |
+| - [X] `erofs_show_progs()`                    | Displays program information      | Shows version info and command-line arguments for diagnostic purposes   |
+| - [ ] `parse_source_date_epoch()`             | Parses timestamp information      | Gets source date epoch for reproducible builds if specified             |
+| - [ ] `gettimeofday()`                        | Gets current time                 | Sets build timestamp if not explicitly provided                         |
+| - [X] `erofs_dev_open()`                      | Opens the output device           | Creates or opens the target filesystem image file                       |
+| - [ ] `load_canned_fs_config()`               | Loads filesystem configuration    | Android-specific: loads predefined filesystem configs if specified      |
+| - [ ] `erofs_blocklist_open()`                | Opens block list file             | For tracking block allocations if specified                             |
+| - [ ] `erofs_show_config()`                   | Shows the configuration           | Displays current configuration for user verification                    |
+| - [ ] `erofs_packedfile_init()`               | Initializes packed files support  | Sets up handling for fragments and extended attributes                  |
+| - [ ] `erofs_blocklist_open()`                | Opens mapping file in tar mode    | Opens a file to record block mappings when in tar mode                  |
+| - [ ] `erofs_read_superblock()`               | Reads existing superblock         | In rebuild/incremental mode: reads superblock from source filesystem    |
+| - [ ] `erofs_buffer_init()`                   | Initializes buffer manager        | Sets up the buffer management system for filesystem creation            |
+| - [ ] `erofs_reserve_sb()`                    | Reserves space for superblock     | Allocates space for the superblock in the filesystem                    |
+| - [ ] `erofs_uuid_generate()`                 | Generates UUID                    | Creates a unique identifier for the filesystem                          |
+| - [ ] `erofs_diskbuf_init()`                  | Initializes disk buffer           | Sets up buffers for tar mode operations                                 |
+| - [ ] `erofs_load_compress_hints()`           | Loads compression hints           | Reads compression configuration from hint file if specified             |
+| - [ ] `z_erofs_compress_init()`               | Initializes compression           | Sets up the compression subsystems based on configuration               |
+| - [ ] `z_erofs_dedupe_init()`                 | Initializes deduplication         | Sets up data deduplication if enabled                                   |
+| - [ ] `erofs_blob_init()`                     | Initializes blob handling         | Sets up blob device support if configured                               |
+| - [ ] `erofs_mkfs_init_devices()`             | Initializes multiple devices      | Sets up device table for multi-device support                           |
+| - [ ] `erofs_inode_manager_init()`            | Initializes inode manager         | Prepares the inode management subsystem                                 |
+| - [ ] `erofs_rebuild_make_root()`             | Creates root inode                | Makes the root directory inode for tar or rebuild mode                  |
+| - [ ] `tarerofs_parse_tar()`                  | Parses tar archive                | Processes input tar archive in tar mode                                 |
+| - [ ] `erofs_rebuild_dump_tree()`             | Dumps directory tree              | Writes the rebuilt directory structure to the filesystem                |
+| - [ ] `erofs_mkfs_rebuild_load_trees()`       | Loads directory trees             | Loads directory structure from source in rebuild mode                   |
+| - [ ] `erofs_build_shared_xattrs_from_path()` | Builds shared extended attributes | Processes extended attributes from the source path                      |
+| - [ ] `erofs_xattr_flush_name_prefixes()`     | Flushes xattr name prefixes       | Writes extended attribute name prefixes to the filesystem               |
+| - [ ] `erofs_mkfs_build_tree_from_path()`     | Builds directory tree             | Creates filesystem structure from the source directory                  |
+| - [ ] `erofs_flush_packed_inode()`            | Flushes packed inodes             | Writes packed data to the filesystem if fragments enabled               |
+| - [ ] `erofs_mkfs_dump_blobs()`               | Dumps blobs                       | Writes blob data to the filesystem                                      |
+| - [ ] `erofs_bflush()`                        | Flushes buffers                   | Writes all pending buffers to the filesystem except superblock          |
+| - [ ] `erofs_fixup_root_inode()`              | Fixes up root inode               | Updates root inode information before writing superblock                |
+| - [ ] `erofs_iput()`                          | Releases inode reference          | Cleans up the root inode reference                                      |
+| - [ ] `erofs_writesb()`                       | Writes superblock                 | Writes the prepared superblock to the filesystem                        |
+| - [ ] `erofs_bflush()`                        | Flushes remaining buffers         | Writes any remaining buffers after superblock                           |
+| - [ ] `erofs_dev_resize()`                    | Resizes the device                | Adjusts the final size of the filesystem image                          |
+| - [ ] `erofs_enable_sb_chksum()`              | Enables superblock checksum       | Calculates and writes superblock checksum if enabled                    |
+| - [ ] `erofs_put_super()`                     | Cleans up superblock              | Frees resources associated with the superblock                          |
+| - [ ] Various cleanup functions               | Clean up resources                | Release all allocated resources and clean up subsystems                 |
+
 
 ## Hardblocks
 
