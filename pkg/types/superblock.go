@@ -41,6 +41,111 @@ type SuperBlock struct {
 	Reserved2           [23]byte // Reserved space
 }
 
+// SuperBlockOnDisk is the on-disk representation with explicit little-endian encoding
+type SuperBlockOnDisk struct {
+	Magic               [4]byte  // __le32
+	Checksum            [4]byte  // __le32
+	FeatureCompat       [4]byte  // __le32
+	BlkSzBits           uint8    // __u8
+	SbExtSlots          uint8    // __u8
+	RootNid             [2]byte  // __le16
+	Inos                [8]byte  // __le64
+	BuildTime           [8]byte  // __le64
+	BuildTimeNsec       [4]byte  // __le32
+	Blocks              [4]byte  // __le32
+	MetaBlkAddr         [4]byte  // __le32
+	XattrBlkAddr        [4]byte  // __le32
+	UUID                [16]byte // __u8[16]
+	VolumeName          [16]byte // __u8[16]
+	FeatureIncompat     [4]byte  // __le32
+	U1                  [2]byte  // Union: __le16 available_compr_algs or __le16 lz4_max_distance
+	ExtraDevices        [2]byte  // __le16
+	DevtSlotOff         [2]byte  // __le16
+	DirBlkBits          uint8    // __u8
+	XattrPrefixCount    uint8    // __u8
+	XattrPrefixStart    [4]byte  // __le32
+	PackedNid           [8]byte  // __le64
+	XattrFilterReserved uint8    // __u8
+	Reserved2           [23]byte // __u8[23]
+}
+
+// FromDisk converts the on-disk representation to an in-memory SuperBlock
+func FromDisk(diskSb *SuperBlockOnDisk) *SuperBlock {
+	sb := &SuperBlock{}
+
+	// Convert all fields from little-endian
+	sb.Magic = binary.LittleEndian.Uint32(diskSb.Magic[:])
+	sb.Checksum = binary.LittleEndian.Uint32(diskSb.Checksum[:])
+	sb.FeatureCompat = binary.LittleEndian.Uint32(diskSb.FeatureCompat[:])
+	sb.BlkSzBits = diskSb.BlkSzBits
+	sb.SbExtSlots = diskSb.SbExtSlots
+	sb.RootNid = binary.LittleEndian.Uint16(diskSb.RootNid[:])
+	sb.Inos = binary.LittleEndian.Uint64(diskSb.Inos[:])
+	sb.BuildTime = binary.LittleEndian.Uint64(diskSb.BuildTime[:])
+	sb.BuildTimeNsec = binary.LittleEndian.Uint32(diskSb.BuildTimeNsec[:])
+	sb.Blocks = binary.LittleEndian.Uint32(diskSb.Blocks[:])
+	sb.MetaBlkAddr = binary.LittleEndian.Uint32(diskSb.MetaBlkAddr[:])
+	sb.XattrBlkAddr = binary.LittleEndian.Uint32(diskSb.XattrBlkAddr[:])
+	copy(sb.UUID[:], diskSb.UUID[:])
+	copy(sb.VolumeName[:], diskSb.VolumeName[:])
+	sb.FeatureIncompat = binary.LittleEndian.Uint32(diskSb.FeatureIncompat[:])
+
+	// Convert union field - store in both fields
+	unionValue := binary.LittleEndian.Uint16(diskSb.U1[:])
+	sb.CompressInfo = unionValue
+
+	sb.ExtraDevices = binary.LittleEndian.Uint16(diskSb.ExtraDevices[:])
+	sb.DevtSlotOff = binary.LittleEndian.Uint16(diskSb.DevtSlotOff[:])
+	sb.DirBlkBits = diskSb.DirBlkBits
+	sb.XattrPrefixCount = diskSb.XattrPrefixCount
+	sb.XattrPrefixStart = binary.LittleEndian.Uint32(diskSb.XattrPrefixStart[:])
+	sb.PackedNid = binary.LittleEndian.Uint64(diskSb.PackedNid[:])
+	sb.XattrFilterReserved = diskSb.XattrFilterReserved
+	copy(sb.Reserved2[:], diskSb.Reserved2[:])
+
+	return sb
+}
+
+// ToDisk converts the in-memory SuperBlock to its on-disk representation
+func (sb *SuperBlock) ToDisk() *SuperBlockOnDisk {
+	diskSb := &SuperBlockOnDisk{}
+
+	// Convert all fields to little-endian
+	binary.LittleEndian.PutUint32(diskSb.Magic[:], sb.Magic)
+	binary.LittleEndian.PutUint32(diskSb.Checksum[:], sb.Checksum)
+	binary.LittleEndian.PutUint32(diskSb.FeatureCompat[:], sb.FeatureCompat)
+	diskSb.BlkSzBits = sb.BlkSzBits
+	diskSb.SbExtSlots = sb.SbExtSlots
+	binary.LittleEndian.PutUint16(diskSb.RootNid[:], sb.RootNid)
+	binary.LittleEndian.PutUint64(diskSb.Inos[:], sb.Inos)
+	binary.LittleEndian.PutUint64(diskSb.BuildTime[:], sb.BuildTime)
+	binary.LittleEndian.PutUint32(diskSb.BuildTimeNsec[:], sb.BuildTimeNsec)
+	binary.LittleEndian.PutUint32(diskSb.Blocks[:], sb.Blocks)
+	binary.LittleEndian.PutUint32(diskSb.MetaBlkAddr[:], sb.MetaBlkAddr)
+	binary.LittleEndian.PutUint32(diskSb.XattrBlkAddr[:], sb.XattrBlkAddr)
+	copy(diskSb.UUID[:], sb.UUID[:])
+	copy(diskSb.VolumeName[:], sb.VolumeName[:])
+	binary.LittleEndian.PutUint32(diskSb.FeatureIncompat[:], sb.FeatureIncompat)
+
+	// Handle the union field based on compression config
+	// if sb.HasCompressionConfig() {
+	binary.LittleEndian.PutUint16(diskSb.U1[:], sb.CompressInfo)
+	// } else {
+	// binary.LittleEndian.PutUint16(diskSb.U1[:], sb.Lz4MaxDistance)
+	// }
+
+	binary.LittleEndian.PutUint16(diskSb.ExtraDevices[:], sb.ExtraDevices)
+	binary.LittleEndian.PutUint16(diskSb.DevtSlotOff[:], sb.DevtSlotOff)
+	diskSb.DirBlkBits = sb.DirBlkBits
+	diskSb.XattrPrefixCount = sb.XattrPrefixCount
+	binary.LittleEndian.PutUint32(diskSb.XattrPrefixStart[:], sb.XattrPrefixStart)
+	binary.LittleEndian.PutUint64(diskSb.PackedNid[:], sb.PackedNid)
+	diskSb.XattrFilterReserved = sb.XattrFilterReserved
+	copy(diskSb.Reserved2[:], sb.Reserved2[:])
+
+	return diskSb
+}
+
 // // BlockSize returns the block size of the filesystem
 // func (sb *SuperBlock) BlockSize() uint32 {
 // 	return 1 << sb.BlocksizeIlog
@@ -663,7 +768,22 @@ func (sbi *SuperBlkInfo) ClearFeature(feature string) {
 	}
 }
 
-// Utility function to round up to the next multiple
-func roundUp(value, multiple int) int {
-	return ((value + multiple - 1) / multiple) * multiple
+// // Utility function to round up to the next multiple
+// func roundUp(value, multiple int) int {
+// 	return ((value + multiple - 1) / multiple) * multiple
+// }
+
+// roundMask returns the mask for rounding operations
+func RoundMask(x, y uint32) uint32 {
+	return y - 1
+}
+
+// roundUp rounds x up to the nearest multiple of y
+func Round_Up(x, y uint32) uint32 {
+	return ((x - 1) | RoundMask(x, y)) + 1
+}
+
+// roundDown rounds x down to the nearest multiple of y
+func Round_Down(x, y uint32) uint32 {
+	return x &^ RoundMask(x, y) // &^ is bitwise AND NOT in Go
 }
