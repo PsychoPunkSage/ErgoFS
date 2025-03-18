@@ -1,7 +1,6 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -469,77 +468,4 @@ func erofsPos(sbi *SuperBlkInfo, nr uint64) uint64 {
 func erofsIloc(inode *ErofsInode) uint64 {
 	sbi := inode.Sbi
 	return erofsPos(sbi, uint64(sbi.MetaBlkAddr)) + (inode.Nid << uint64(sbi.ISlotBits))
-}
-
-// ErofsDevRead reads data from an EROFS device
-func ErofsDevRead(sbi *SuperBlkInfo, deviceID int, buf []byte, offset uint64, length int64) (int64, error) {
-	var read int64
-	var err error
-
-	if deviceID > 0 {
-		if deviceID > int(sbi.NBlobs) {
-			return 0, fmt.Errorf("invalid device id %d: %w", deviceID, syscall.Errno(syscall.EIO))
-		}
-
-		// Create a temporary ErofsVfile with the blob file descriptor
-		vfile := ErofsVFile{
-			Fd: int(sbi.BlobFd[deviceID-1]),
-		}
-
-		read, err = ErofsIoPread(&vfile, buf, offset, length)
-	} else {
-		// Read from the main device
-		read, err = ErofsIoPread(sbi.BDev, buf, offset, length)
-	}
-
-	if err != nil {
-		return read, err
-	}
-
-	if read < length {
-		// Log that we've reached the end of the device
-		fmt.Printf("reach EOF of device @ %d, padding with zeroes\n", offset)
-
-		// Pad the rest of the buffer with zeros
-		for i := read; i < length; i++ {
-			buf[i] = 0
-		}
-	}
-
-	return length, nil
-}
-
-func ErofsIoPread(vf *ErofsVFile, buf []byte, pos uint64, length int64) (int64, error) {
-	var totalRead int64
-
-	// if cfg.CDryRun {
-	// 	return 0, nil
-	// }
-
-	// If vf has custom read operations, use it
-	if vf.Ops != nil && vf.Ops.Pread != nil {
-		return int64(vf.Ops.Pread(vf, buf, pos, uint64(length))), nil
-	}
-
-	// Adjust position based on file offset
-	pos += vf.Offset
-
-	for totalRead < int64(length) {
-		n, err := syscall.Pread(int(vf.Fd), buf[totalRead:], int64(pos))
-		if err != nil {
-			if errors.Is(err, syscall.EINTR) {
-				continue // Retry if interrupted
-			}
-			fmt.Printf("Failed to read: %v\n", err)
-			return totalRead, err
-		}
-		if n == 0 {
-			break // End of file
-		}
-
-		pos += uint64(n)
-		totalRead += int64(n)
-	}
-
-	return totalRead, nil
 }
