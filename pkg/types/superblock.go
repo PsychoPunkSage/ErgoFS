@@ -620,48 +620,95 @@ func (sbi *SuperBlkInfo) WriteSuperblock() ([]byte, error) {
 	return buf, nil
 }
 
-// EnableSuperblockChecksum computes and sets the superblock checksum
-func (sbi *SuperBlkInfo) EnableSuperblockChecksum(buf []byte) (uint32, error) {
-	Debug(EROFS_DBG, "Computing superblock checksum")
+// // EnableSuperblockChecksum computes and sets the superblock checksum
+// func (sbi *SuperBlkInfo) EnableSuperblockChecksum(buf []byte) (uint32, error) {
+// 	Debug(EROFS_DBG, "Computing superblock checksum")
 
-	// Enable checksum feature in the buffer
-	featureCompat := uint32(buf[EROFS_SUPER_OFFSET+8]) |
-		(uint32(buf[EROFS_SUPER_OFFSET+9]) << 8) |
-		(uint32(buf[EROFS_SUPER_OFFSET+10]) << 16) |
-		(uint32(buf[EROFS_SUPER_OFFSET+11]) << 24)
+// 	// Enable checksum feature in the buffer
+// 	featureCompat := uint32(buf[EROFS_SUPER_OFFSET+8]) |
+// 		(uint32(buf[EROFS_SUPER_OFFSET+9]) << 8) |
+// 		(uint32(buf[EROFS_SUPER_OFFSET+10]) << 16) |
+// 		(uint32(buf[EROFS_SUPER_OFFSET+11]) << 24)
 
-	featureCompat |= EROFS_FEATURE_COMPAT_SB_CHKSUM
+// 	featureCompat |= EROFS_FEATURE_COMPAT_SB_CHKSUM
 
-	// Update the feature compatibility flag
-	buf[EROFS_SUPER_OFFSET+8] = byte(featureCompat)
-	buf[EROFS_SUPER_OFFSET+9] = byte(featureCompat >> 8)
-	buf[EROFS_SUPER_OFFSET+10] = byte(featureCompat >> 16)
-	buf[EROFS_SUPER_OFFSET+11] = byte(featureCompat >> 24)
+// 	// Update the feature compatibility flag
+// 	buf[EROFS_SUPER_OFFSET+8] = byte(featureCompat)
+// 	buf[EROFS_SUPER_OFFSET+9] = byte(featureCompat >> 8)
+// 	buf[EROFS_SUPER_OFFSET+10] = byte(featureCompat >> 16)
+// 	buf[EROFS_SUPER_OFFSET+11] = byte(featureCompat >> 24)
 
-	// Clear the current checksum field
-	buf[EROFS_SUPER_OFFSET+4] = 0
-	buf[EROFS_SUPER_OFFSET+5] = 0
-	buf[EROFS_SUPER_OFFSET+6] = 0
-	buf[EROFS_SUPER_OFFSET+7] = 0
+// 	// Clear the current checksum field
+// 	buf[EROFS_SUPER_OFFSET+4] = 0
+// 	buf[EROFS_SUPER_OFFSET+5] = 0
+// 	buf[EROFS_SUPER_OFFSET+6] = 0
+// 	buf[EROFS_SUPER_OFFSET+7] = 0
 
-	// Calculate length for checksum - use one block
-	length := int(sbi.ErofsBlockSize())
-	if length > int(EROFS_SUPER_OFFSET) {
-		length -= int(EROFS_SUPER_OFFSET)
+// 	// Calculate length for checksum - use one block
+// 	length := int(sbi.ErofsBlockSize())
+// 	if length > int(EROFS_SUPER_OFFSET) {
+// 		length -= int(EROFS_SUPER_OFFSET)
+// 	}
+
+// 	// Calculate CRC32C checksum
+// 	crc := Crc32c(0xFFFFFFFF, buf[EROFS_SUPER_OFFSET:int(EROFS_SUPER_OFFSET)+length])
+
+// 	// Update the checksum field
+// 	buf[EROFS_SUPER_OFFSET+4] = byte(crc)
+// 	buf[EROFS_SUPER_OFFSET+5] = byte(crc >> 8)
+// 	buf[EROFS_SUPER_OFFSET+6] = byte(crc >> 16)
+// 	buf[EROFS_SUPER_OFFSET+7] = byte(crc >> 24)
+
+// 	Debug(EROFS_DBG, "Superblock checksum computed: 0x%08x", crc)
+// 	return crc, nil
+
+// }
+
+func ErofsEnableSbChksum(sbi *SuperBlkInfo, crc *uint32) int {
+	var ret int
+	var buf [EROFS_MAX_BLOCK_SIZE]byte
+	var length uint32
+	var sb *SuperBlock
+
+	ret = ErofsBlkRead(sbi, 0, buf[:], 0, uint32(ErofsBlknr(sbi, uint(EROFS_SUPER_END))+1))
+	if ret != 0 {
+		// ErofsErr("failed to read superblock to set checksum: %s",
+		// ErofsStrerror(ret))
+		return ret
 	}
 
-	// Calculate CRC32C checksum
-	crc := Crc32c(0xFFFFFFFF, buf[EROFS_SUPER_OFFSET:int(EROFS_SUPER_OFFSET)+length])
+	/*
+	 * skip the first 1024 bytes, to allow for the installation
+	 * of x86 boot sectors and other oddities.
+	 */
+	sb = (*SuperBlock)(unsafe.Pointer(&buf[EROFS_SUPER_OFFSET]))
 
-	// Update the checksum field
-	buf[EROFS_SUPER_OFFSET+4] = byte(crc)
-	buf[EROFS_SUPER_OFFSET+5] = byte(crc >> 8)
-	buf[EROFS_SUPER_OFFSET+6] = byte(crc >> 16)
-	buf[EROFS_SUPER_OFFSET+7] = byte(crc >> 24)
+	if Le32ToCpu(sb.Magic) != EROFS_SUPER_MAGIC_V1 {
+		// ErofsErr("internal error: not an erofs valid image")
+		return -EFAULT
+	}
 
-	Debug(EROFS_DBG, "Superblock checksum computed: 0x%08x", crc)
-	return crc, nil
+	/* turn on checksum feature */
+	sb.FeatureCompat = CpuToLe32(Le32ToCpu(sb.FeatureCompat) |
+		EROFS_FEATURE_COMPAT_SB_CHKSUM)
+	if ErofsBlkSiz(sbi) > EROFS_SUPER_OFFSET {
+		length = ErofsBlkSiz(sbi) - EROFS_SUPER_OFFSET
+	} else {
+		length = ErofsBlkSiz(sbi)
+	}
+	*crc = Crc32c(^uint32(0), (*[1<<31 - 1]byte)(unsafe.Pointer(sb))[:length])
 
+	/* set up checksum field to erofs_super_block */
+	sb.Checksum = CpuToLe32(*crc)
+
+	ret = ErofsBlkWrite(sbi, buf[:], 0, 1)
+	if ret != 0 {
+		// ErofsErr("failed to write checksummed superblock: %s",
+		// ErofsStrerror(ret))
+		return ret
+	}
+
+	return 0
 }
 
 // Crc32c calculates CRC32C checksum (Castagnoli polynomial)
@@ -786,4 +833,35 @@ func Round_Up(x, y uint32) uint32 {
 // roundDown rounds x down to the nearest multiple of y
 func Round_Down(x, y uint32) uint32 {
 	return x &^ RoundMask(x, y) // &^ is bitwise AND NOT in Go
+}
+
+// erofsBlknr computes the block number from an address
+func ErofsBlknr(sbi *SuperBlkInfo, addr uint) uint {
+	return addr >> sbi.BlkSzBits
+}
+
+// Le32ToCpu converts a little-endian uint32 to the CPU's native endianness
+// This is the Go equivalent of the C macro le32_to_cpu
+func Le32ToCpu(value uint32) uint32 {
+	// Create a temporary buffer
+	var buf [4]byte
+
+	// Copy the value bytes to the buffer
+	*(*uint32)(unsafe.Pointer(&buf[0])) = value
+
+	// Read using little-endian byte order
+	return binary.LittleEndian.Uint32(buf[:])
+}
+
+// CpuToLe32 converts a uint32 from CPU's native endianness to little-endian
+// This is the Go equivalent of the C macro cpu_to_le32
+func CpuToLe32(value uint32) uint32 {
+	// Create a temporary buffer
+	var buf [4]byte
+
+	// Write using little-endian byte order
+	binary.LittleEndian.PutUint32(buf[:], value)
+
+	// Copy the buffer bytes back to a uint32
+	return *(*uint32)(unsafe.Pointer(&buf[0]))
 }
