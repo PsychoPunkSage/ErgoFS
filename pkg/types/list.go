@@ -279,3 +279,53 @@ func ContainerOf(ptr, typ interface{}, member string) interface{} {
 
 	return containerPtr
 }
+
+// ForEachEntrySafeWithPos is a more direct equivalent to list_for_each_entry_safe
+// It iterates the list safely while providing direct access to pos and n
+// This allows for a syntax closer to the original C macro
+func ForEachEntrySafeWithPos(head *ListHead, container interface{}, member string) func() (interface{}, interface{}, bool) {
+	// Initialize pos and n
+	pos := ListFirstEntry(head, container, member)
+
+	// Check if list is empty
+	posValue := reflect.ValueOf(pos).Elem()
+	memberField := posValue.FieldByName(member)
+	listHead := memberField.Interface().(*ListHead)
+	if listHead == head {
+		return func() (interface{}, interface{}, bool) {
+			return nil, nil, false
+		}
+	}
+
+	n := ListNextEntry(pos, member)
+
+	// Return an iterator function
+	return func() (interface{}, interface{}, bool) {
+		// If we've reached the end of the list
+		posValue := reflect.ValueOf(pos).Elem()
+		memberField := posValue.FieldByName(member)
+		listHead := memberField.Interface().(*ListHead)
+		if listHead == head {
+			return nil, nil, false
+		}
+
+		// Save current pos and n
+		curPos := pos
+		curN := n
+
+		// Update for next iteration
+		pos = n
+
+		// Check if we're at the end of the list
+		posValue = reflect.ValueOf(pos).Elem()
+		memberField = posValue.FieldByName(member)
+		listHead = memberField.Interface().(*ListHead)
+		if listHead == head {
+			return curPos, curN, false
+		}
+
+		n = ListNextEntry(pos, member)
+
+		return curPos, curN, true
+	}
+}
