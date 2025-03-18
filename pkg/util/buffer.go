@@ -1,6 +1,8 @@
 package util
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"reflect"
@@ -53,6 +55,140 @@ func ReserveSuperblock(bmgr *types.BufferManager) (*types.BufferHead, error) {
 	}
 
 	return bh, nil
+}
+
+// erofsWriteSb is the Go equivalent of erofs_writesb
+func WriteSuperBlock(sbi *types.SuperBlkInfo, sbBh *types.BufferHead, blocks *uint32) int {
+	// Create the superblock structure
+	sb := types.SuperBlock{
+		Magic:            (types.EROFS_SUPER_MAGIC_V1),
+		BlkSzBits:        sbi.BlkSzBits,
+		RootNid:          uint16(sbi.RootNid),
+		Inos:             (sbi.Inos),
+		BuildTime:        (sbi.BuildTime),
+		BuildTimeNsec:    (sbi.BuildTimeNsec),
+		MetaBlkAddr:      (sbi.MetaBlkAddr),
+		XattrBlkAddr:     (sbi.XattrBlkAddr),
+		XattrPrefixCount: sbi.XattrPrefixCount,
+		XattrPrefixStart: (sbi.XattrPrefixStart),
+		FeatureIncompat:  (sbi.FeatureIncompat),
+		FeatureCompat:    (sbi.FeatureCompat & ^types.EROFS_FEATURE_COMPAT_SB_CHKSUM),
+		ExtraDevices:     (sbi.ExtraDevices),
+		DevtSlotOff:      (sbi.DevtSlotOff),
+		PackedNid:        (sbi.PackedNid),
+	}
+
+	// Calculate rounded up block size
+	sbBlksize := types.Round_Up(types.EROFS_SUPER_END, types.ErofsBlkSiz(sbi))
+
+	// Get the blocks count
+	*blocks = MapBh(sbi.Bmgr, nil)
+	sb.Blocks = (*blocks)
+
+	// Copy UUID and volume name
+	copy(sb.UUID[:], sbi.UUID[:])
+	copy(sb.VolumeName[:], sbi.VolumeName[:])
+
+	// Set compression configuration
+	if sbi.ErofsSbHasComprCfgs() {
+		// sb.U1.AvailableComprAlgs = uint16ToLe16(sbi.AvailableComprAlgs)
+		sb.CompressInfo = (sbi.AvailableComprAlgs)
+	} else {
+		// sb.U1.Lz4MaxDistance = uint16ToLe16(sbi.Lz4.MaxDistance)
+		sb.CompressInfo = (sbi.Lz4.MaxDistance)
+	}
+
+	// Allocate memory for the superblock
+	buf := make([]byte, sbBlksize)
+	// if buf == nil {
+	// 	// erofsErr("failed to allocate memory for sb: %s", erofsStrerror(-ENOMEM))
+	// 	return -types.ENOMEM
+	// }
+
+	// PPS:: MY Method || Convert the in-memory superblock to on-disk format and copy to buffer
+	diskSb := sb.ToDisk()
+	// Create a byte slice from the diskSb struct
+	var diskSbBytes bytes.Buffer
+	binary.Write(&diskSbBytes, binary.LittleEndian, diskSb)
+	// Copy the serialized data to the buffer at the appropriate offset
+	copy(buf[types.EROFS_SUPER_OFFSET:], diskSbBytes.Bytes())
+
+	// // Copy superblock data to the buffer at the appropriate offset
+	// sbBytes := (*[unsafe.Sizeof(sb)]byte)(unsafe.Pointer(&sb))[:]
+	// copy(buf[types.EROFS_SUPER_OFFSET:], sbBytes)
+
+	// Calculate the write position
+	var writePos uint64 = 0
+	if sbBh != nil {
+		writePos = BhTell(sbBh, false)
+	}
+
+	// Write to device
+	ret := types.ErofsDevWrite(sbi, buf, writePos, int(types.EROFS_SUPER_END))
+
+	// Clean up
+	if sbBh != nil {
+		BDrop(sbBh, false)
+	}
+
+	return ret
+}
+
+func ErofsBflush(bmgr *types.BufferManager, bb *types.BufferBlock) int {
+	sbi := bmgr.Sbi
+	blksiz := types.ErofsBlkSiz(sbi)
+	var p, n *types.BufferBlock
+
+	// List iteration equivalent to list_for_each_entry_safe
+	for entry := bmgr.BlkH.List.Next; entry != &bmgr.BlkH.List; entry = entry.Next {
+		p = types.ListEntry(entry, types.BufferBlock{}, "List").(*types.BufferBlock)
+		n = types.ListEntry(entry.Next, types.BufferBlock{}, "List").(*types.BufferBlock)
+
+		if p == bb {
+			break
+		}
+
+		blkaddr := __ErofsMapbh(p)
+
+		// Inner list iteration
+		var bh, nbh *types.BufferHead
+		skip := false
+		var ret int
+
+		for entryBh := p.Buffers.List.Next; entryBh != &p.Buffers.List; entryBh = entryBh.Next {
+			bh = types.ListEntry(entryBh, types.BufferHead{}, "List").(*types.BufferHead)
+			nbh = types.ListEntry(entryBh.Next, types.BufferHead{}, "List").(*types.BufferHead)
+
+			if bh.Op == &ErofsSkipWriteBhops {
+				skip = true
+				continue
+			}
+
+			// Flush and remove bh
+			ret = bh.Op.Flush(bh)
+			if ret < 0 {
+				return ret
+			}
+		}
+
+		if skip {
+			continue
+		}
+
+		padding := uint64(blksiz) - (p.Buffers.Off & (uint64(blksiz) - 1))
+		if padding != uint64(blksiz) {
+			ErofsDevFillzero(sbi, types.ErofsPos(sbi, blkaddr)-padding, padding, true)
+		}
+
+		if p.Type != types.DATA {
+			bmgr.MetaBlkCnt += uint32(types.BlkRoundUp(sbi, p.Buffers.Off))
+		}
+
+		// ErofsDbg("block %u to %u flushed", p.Blkaddr, blkaddr-1)
+		ErofsBfree(p)
+	}
+
+	return 0
 }
 
 // Helper function to get alignment size
