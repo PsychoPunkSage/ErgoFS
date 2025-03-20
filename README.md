@@ -105,15 +105,11 @@
 ```
 .
 ├── cmd
-│   ├── mkfs
-│   │   └── main.go
-│   └── verify
+│   └── mkfs
 │       └── main.go
-├── c_reference.img
+├── compress_hints.txt
 ├── go.mod
-├── go_reference.img
-├── mkfs.erofs
-├── mount_point
+├── go.sum
 ├── pkg
 │   ├── compression
 │   │   ├── algorithms.go
@@ -122,13 +118,22 @@
 │   ├── dedupe
 │   │   └── dedupe.go
 │   ├── types
+│   │   ├── buffer.go
+│   │   ├── compress.go
+│   │   ├── compressor
 │   │   ├── config.go
 │   │   ├── constants.go
 │   │   ├── debug.go
+│   │   ├── error.go
+│   │   ├── helper.go
 │   │   ├── inode.go
-│   │   └── superblock.go
+│   │   ├── internal.go
+│   │   ├── list.go
+│   │   ├── lz4.go
+│   │   ├── macros.go
+│   │   ├── superblock.go
+│   │   └── uuid.go
 │   ├── util
-│   │   ├── blocklist.go
 │   │   ├── buffer.go
 │   │   └── diskbuf.go
 │   └── writer
@@ -147,6 +152,7 @@
 │   ├── go_superblock.bin
 │   └── go_superblock.txt
 ├── report.sh
+├── run.sh
 ├── script.sh
 ├── test
 └── test_data
@@ -156,7 +162,7 @@
     │   └── test.txt
     └── symlink -> hello.txt
 
-15 directories, 37 files
+15 directories, 48 files
 ```
 
 </details>
@@ -170,52 +176,48 @@
 ## How to use?
 
 ```sh
-./script.sh
+./run.sh
 ```
 
 <details>
 <summary>OUTPUT(Go-ErgoFS)</summary>
 
 ```
-===== EROFS Testing Script =====
-Creating test data...
-Building tools...
-Creating EROFS image...
-Creating EroFS filesystem on test.img
-Block size: 4096 bytes
-Input directory: /home/psychopunk_sage/dev/OpenSource/Unikraft/erofs-utils/test_data
-Found 3 files/directories
-Superblock checksum: 0xec1f893c
-EroFS filesystem creation complete
-Total blocks: 0
-Total inodes: 3
-Creating mount point...
-Attempting to mount the image...
-mount: /home/psychopunk_sage/dev/OpenSource/Unikraft/ErgoFS/mount_point: wrong fs type, bad option, bad superblock on /dev/loop48, missing codepage or helper program, or other error.
-       dmesg(1) may have more information after failed mount system call.
-Mount failed. Checking kernel messages...
-[56389.072955] wlo1: disconnect from AP e8:10:98:6b:3e:31 for new auth to e8:10:98:6b:2e:51
-[56389.244603] wlo1: authenticate with e8:10:98:6b:2e:51 (local address=f8:89:d2:8d:e7:05)
-[56389.244611] wlo1: send auth to e8:10:98:6b:2e:51 (try 1/3)
-[56389.356822] wlo1: send auth to e8:10:98:6b:2e:51 (try 2/3)
-[56389.357976] wlo1: authenticated
-[56389.358510] wlo1: associate with e8:10:98:6b:2e:51 (try 1/3)
-[56389.362274] wlo1: RX ReassocResp from e8:10:98:6b:2e:51 (capab=0x1411 status=0 aid=1)
-[56389.477200] wlo1: associated
-[56389.477309] wlo1: Limiting TX power to 36 (36 - 0) dBm as advertised by e8:10:98:6b:2e:51
-[56500.425821] wlo1: disconnect from AP e8:10:98:6b:2e:51 for new auth to e8:10:98:6b:2e:41
-[56500.595553] wlo1: authenticate with e8:10:98:6b:2e:41 (local address=f8:89:d2:8d:e7:05)
-[56500.595561] wlo1: send auth to e8:10:98:6b:2e:41 (try 1/3)
-[56500.708576] wlo1: send auth to e8:10:98:6b:2e:41 (try 2/3)
-[56500.710748] wlo1: authenticated
-[56500.711536] wlo1: associate with e8:10:98:6b:2e:41 (try 1/3)
-[56500.715043] wlo1: RX ReassocResp from e8:10:98:6b:2e:41 (capab=0x1531 status=0 aid=1)
-[56500.828833] wlo1: associated
-[56500.828901] wlo1: Limiting TX power to 36 (36 - 0) dBm as advertised by e8:10:98:6b:2e:41
-[56616.930325] loop48: detected capacity change from 0 to 8
-[56616.930607] erofs: (device loop48): erofs_read_superblock: dirblkbits 12 isn't supported
-===== Test Complete =====
+Debug Level: 4, Image Path: output.img, Source Path: test_data/
+I'm here
+successfully opened output.img
+Superblock reserved successfully: &{{0xc000104200 0xc000104200} 0xc000112070 0 0x5e01e0 <nil>}
+UUID generated successfully: [51 56 74 108 149 254 78 116 130 208 58 195 69 200 222 149]
+Compress Initialization successfully Done
+Erofs Bflush successfully executed
+Superblock successfully Written
+ret: 0
+SuperBlock checksum 0x5c390b03 written
 ```
+
+> $ sudo dmesg | grep -i erofs
+
+```
+NO OUTPUT :)
+```
+
+> $ sudo dmesg
+
+```
+[40382.691728] wlo1: associated
+[40382.691852] wlo1: Limiting TX power to 30 (30 - 0) dBm as advertised by e8:10:98:6b:3e:32
+[40448.887111] audit: type=1400 audit(1742497728.950:517): apparmor="DENIED" operation="open" class="file" profile="snap.brave.brave" name="/proc/pressure/cpu" pid=30524 comm="ThreadPoolForeg" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[40448.887131] audit: type=1400 audit(1742497728.950:518): apparmor="DENIED" operation="open" class="file" profile="snap.brave.brave" name="/proc/pressure/io" pid=30524 comm="ThreadPoolForeg" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[40448.887140] audit: type=1400 audit(1742497728.950:519): apparmor="DENIED" operation="open" class="file" profile="snap.brave.brave" name="/proc/pressure/memory" pid=30524 comm="ThreadPoolForeg" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[40619.188322] wlo1: authenticate with e8:10:98:6b:2e:52 (local address=f8:89:d2:8d:e7:05)
+[40619.188338] wlo1: send auth to e8:10:98:6b:2e:52 (try 1/3)
+[40619.189880] wlo1: authenticated
+[40619.191955] wlo1: associate with e8:10:98:6b:2e:52 (try 1/3)
+[40619.196179] wlo1: RX AssocResp from e8:10:98:6b:2e:52 (capab=0x1411 status=0 aid=3)
+[40619.305425] wlo1: associated
+[40619.305672] wlo1: Limiting TX power to 36 (36 - 0) dBm as advertised by e8:10:98:6b:2e:52
+```
+* No recent logs are related to superblock errors. (i.e. earlier I got the malformed superblock error... now everything is working fine)
 
 </details>
 
@@ -251,6 +253,7 @@ Filesystem total deduplicated bytes (of source files): 0
 
 </details><br>
 
+<!-- HI
 | Function Call                                 | Purpose                           | Reason                                                                  |
 | --------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------- |
 | - [X] `erofs_init_configure()`                | Initializes the configuration     | Sets up the global configuration environment before parsing any options |
@@ -294,13 +297,14 @@ Filesystem total deduplicated bytes (of source files): 0
 | - [ ] `erofs_enable_sb_chksum()`              | Enables superblock checksum       | Calculates and writes superblock checksum if enabled                    |
 | - [ ] `erofs_put_super()`                     | Cleans up superblock              | Frees resources associated with the superblock                          |
 | - [ ] Various cleanup functions               | Clean up resources                | Release all allocated resources and clean up subsystems                 |
+HiV -->
 
 
-## Hardblocks
+<!-- ## Hardblocks
 
 getting this `[59132.367167] erofs: (device loop48): erofs_read_superblock: dirblkbits 12 isn't supported` 
 * this is weird cause I'm not hardonding anything to 12 yet I'm getting same error over and over again
 
 You can have a look [@Report](./report/) (I have compared images I got from C and Go based EroFS)
 
-Not sure where the issue lies
+Not sure where the issue lies -->
