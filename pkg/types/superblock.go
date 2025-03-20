@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"math"
 	"syscall"
@@ -619,51 +620,6 @@ func (sbi *SuperBlkInfo) WriteSuperblock() ([]byte, error) {
 	Debug(EROFS_DBG, "Superblock prepared successfully")
 	return buf, nil
 }
-
-// // EnableSuperblockChecksum computes and sets the superblock checksum
-// func (sbi *SuperBlkInfo) EnableSuperblockChecksum(buf []byte) (uint32, error) {
-// 	Debug(EROFS_DBG, "Computing superblock checksum")
-
-// 	// Enable checksum feature in the buffer
-// 	featureCompat := uint32(buf[EROFS_SUPER_OFFSET+8]) |
-// 		(uint32(buf[EROFS_SUPER_OFFSET+9]) << 8) |
-// 		(uint32(buf[EROFS_SUPER_OFFSET+10]) << 16) |
-// 		(uint32(buf[EROFS_SUPER_OFFSET+11]) << 24)
-
-// 	featureCompat |= EROFS_FEATURE_COMPAT_SB_CHKSUM
-
-// 	// Update the feature compatibility flag
-// 	buf[EROFS_SUPER_OFFSET+8] = byte(featureCompat)
-// 	buf[EROFS_SUPER_OFFSET+9] = byte(featureCompat >> 8)
-// 	buf[EROFS_SUPER_OFFSET+10] = byte(featureCompat >> 16)
-// 	buf[EROFS_SUPER_OFFSET+11] = byte(featureCompat >> 24)
-
-// 	// Clear the current checksum field
-// 	buf[EROFS_SUPER_OFFSET+4] = 0
-// 	buf[EROFS_SUPER_OFFSET+5] = 0
-// 	buf[EROFS_SUPER_OFFSET+6] = 0
-// 	buf[EROFS_SUPER_OFFSET+7] = 0
-
-// 	// Calculate length for checksum - use one block
-// 	length := int(sbi.ErofsBlockSize())
-// 	if length > int(EROFS_SUPER_OFFSET) {
-// 		length -= int(EROFS_SUPER_OFFSET)
-// 	}
-
-// 	// Calculate CRC32C checksum
-// 	crc := Crc32c(0xFFFFFFFF, buf[EROFS_SUPER_OFFSET:int(EROFS_SUPER_OFFSET)+length])
-
-// 	// Update the checksum field
-// 	buf[EROFS_SUPER_OFFSET+4] = byte(crc)
-// 	buf[EROFS_SUPER_OFFSET+5] = byte(crc >> 8)
-// 	buf[EROFS_SUPER_OFFSET+6] = byte(crc >> 16)
-// 	buf[EROFS_SUPER_OFFSET+7] = byte(crc >> 24)
-
-// 	Debug(EROFS_DBG, "Superblock checksum computed: 0x%08x", crc)
-// 	return crc, nil
-
-// }
-
 func ErofsEnableSbChksum(sbi *SuperBlkInfo, crc *uint32) int {
 	var ret int
 	var buf [EROFS_MAX_BLOCK_SIZE]byte
@@ -671,6 +627,7 @@ func ErofsEnableSbChksum(sbi *SuperBlkInfo, crc *uint32) int {
 	var sb *SuperBlock
 
 	ret = ErofsBlkRead(sbi, 0, buf[:], 0, uint32(ErofsBlknr(sbi, uint(EROFS_SUPER_END))+1))
+	fmt.Printf("ret: %v\n", ret)
 	if ret != 0 {
 		// ErofsErr("failed to read superblock to set checksum: %s",
 		// ErofsStrerror(ret))
@@ -814,11 +771,6 @@ func (sbi *SuperBlkInfo) ClearFeature(feature string) {
 		sbi.FeatureCompat &= ^uint32(EROFS_FEATURE_COMPAT_XATTR_FILTER)
 	}
 }
-
-// // Utility function to round up to the next multiple
-// func roundUp(value, multiple int) int {
-// 	return ((value + multiple - 1) / multiple) * multiple
-// }
 
 // roundMask returns the mask for rounding operations
 func RoundMask(x, y uint32) uint32 {
