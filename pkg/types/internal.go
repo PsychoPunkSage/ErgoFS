@@ -16,6 +16,11 @@ func ErofsBlkWrite(sbi *SuperBlkInfo, buf []byte, blkAddr, nblocks uint32) int {
 	return ErofsDevWrite(sbi, buf, ErofsPos(sbi, uint64(blkAddr)), int(ErofsPos(sbi, uint64(nblocks))))
 }
 
+// ErofsDevResize resizes the device to the given number of blocks
+func ErofsDevResize(sbi *SuperBlkInfo, blocks uint32) int {
+	return ErofsIoFtruncate(sbi.BDev, uint64(blocks)*uint64(ErofsBlkSiz(sbi)))
+}
+
 // ErofsDevWrite writes data to an EROFS device
 func ErofsDevWrite(sbi *SuperBlkInfo, buf []byte, offset uint64, length int) int {
 	written, _ := ErofsIoPwrite(sbi.BDev, buf, offset, length)
@@ -63,6 +68,11 @@ func ErofsDevRead(sbi *SuperBlkInfo, deviceID int, buf []byte, offset uint64, le
 	return length, nil
 }
 
+// ErofsDevFillzero - inline function to fill with zeros
+func ErofsDevFillzero(sbi *SuperBlkInfo, offset uint64, length uint64, pad bool) int64 {
+	return ErofsIoFallocate(sbi.BDev, offset, length, pad)
+}
+
 func ErofsIoPread(vf *ErofsVFile, buf []byte, pos uint64, length int64) (int64, error) {
 	var totalRead int64
 
@@ -96,11 +106,6 @@ func ErofsIoPread(vf *ErofsVFile, buf []byte, pos uint64, length int64) (int64, 
 	}
 
 	return totalRead, nil
-}
-
-// ErofsDevFillzero - inline function to fill with zeros
-func ErofsDevFillzero(sbi *SuperBlkInfo, offset uint64, length uint64, pad bool) int64 {
-	return ErofsIoFallocate(sbi.BDev, offset, length, pad)
 }
 
 // ErofsIoFallocate - allocate or zero-fill file space
@@ -177,4 +182,33 @@ func ErofsIoPwrite(vf *ErofsVFile, buf []byte, pos uint64, length int) (int, err
 	}
 
 	return written, nil
+}
+
+// ErofsIoFtruncate truncates a virtual file to the given length
+func ErofsIoFtruncate(vf *ErofsVFile, length uint64) int {
+	if GCfg.DryRun {
+		return 0
+	}
+
+	if vf.Ops != nil {
+		return vf.Ops.Ftruncate(vf, length)
+	}
+
+	var stat syscall.Stat_t
+	err := syscall.Fstat(vf.Fd, &stat)
+	if err != nil {
+		// ErofsErr("failed to fstat: %s", syscall.Errno(ret).Error())
+		return -1
+	}
+
+	length += vf.Offset
+	if (stat.Mode&syscall.S_IFMT) == syscall.S_IFBLK || uint64(stat.Size) == length {
+		return 0
+	}
+
+	err = syscall.Ftruncate(vf.Fd, int64(length))
+	if err != nil {
+		return -1 // or another error code as per your logic
+	}
+	return 0
 }
