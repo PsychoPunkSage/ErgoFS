@@ -189,58 +189,94 @@ func WriteSuperBlock(sbi *SuperBlkInfo, sbBh *BufferHead, blocks *uint32) int {
 }
 
 func ErofsBflush(bmgr *BufferManager, bb *BufferBlock) int {
+	// fmt.Println("1")
 	sbi := bmgr.Sbi
 	blksiz := ErofsBlkSiz(sbi)
+	// fmt.Println("2")
 
-	// Use ForEachEntrySafeWithPos for outer loop
-	outerIter := ForEachEntrySafeWithPos(&bmgr.BlkH.List, BufferBlock{}, "List")
-	for posInterface, _, ok := outerIter(); ok; posInterface, _, ok = outerIter() {
-		p := posInterface.(*BufferBlock)
+	// Check if list is empty
+	if IsListEmpty(&bmgr.BlkH.List) {
+		return 0
+	}
 
-		// Check if we need to break the loop
+	// Start with the first buffer block
+	p := BufferBlockFromList(bmgr.BlkH.List.Next)
+	if p == nil {
+		return 0
+	}
+
+	for p != nil && &p.List != &bmgr.BlkH.List {
+		// fmt.Println("3")
+
+		// Save next before potentially freeing p
+		var n *BufferBlock
+		if p.List.Next != nil && p.List.Next != &bmgr.BlkH.List {
+			n = BufferBlockFromList(p.List.Next)
+		}
+
+		// Exit if we hit the specified block
 		if p == bb {
 			break
 		}
 
 		blkaddr := MapBhInternal(p)
 
-		// Use ForEachEntrySafeWithPos for inner loop
+		// Process buffer heads - DO NOT use same List/Next comparison as outer loop
 		skip := false
-		var ret int
 
-		innerIter := ForEachEntrySafeWithPos(&p.Buffers.List, BufferHead{}, "List")
-		for bhInterface, _, innerOk := innerIter(); innerOk; bhInterface, _, innerOk = innerIter() {
-			bh := bhInterface.(*BufferHead)
+		// Check if the buffer list is empty
+		if !IsListEmpty(&p.Buffers.List) {
+			var bh *BufferHead
+			// Get the first buffer head in the list
+			bh = BufferHeadFromList(p.Buffers.List.Next)
 
-			if bh.Op == &SkipWriteBhops {
-				skip = true
-				continue
+			// Process all buffer heads in the list properly
+			for bh != nil && &bh.List != &p.Buffers.List {
+				// Save next before potentially removing bh
+				var nbh *BufferHead
+				if bh.List.Next != nil && bh.List.Next != &p.Buffers.List {
+					nbh = BufferHeadFromList(bh.List.Next)
+				}
+
+				if bh.Op == SkipWriteOps {
+					skip = true
+				} else if bh.Op != nil {
+					// Flush and remove bh
+					ret := bh.Op.Flush(bh)
+					if ret < 0 {
+						return ret
+					}
+				}
+
+				// Move to next or break
+				if nbh == nil || nbh == bh {
+					break
+				}
+				bh = nbh
+			}
+		}
+
+		if !skip {
+			padding := uint64(blksiz) - (p.Buffers.Off & (uint64(blksiz) - 1))
+			if padding != uint64(blksiz) {
+				ErofsDevFillzero(sbi, ErofsPos(sbi, blkaddr)-padding, padding, true)
 			}
 
-			// Flush and remove bh
-			ret = bh.Op.Flush(bh)
-			if ret < 0 {
-				return ret
+			if p.Type != DATA {
+				bmgr.MetaBlkCnt += uint32(BlkRoundUp(sbi, p.Buffers.Off))
 			}
+
+			ErofsBfree(p)
 		}
 
-		if skip {
-			continue
+		// Move to next or break
+		if n == nil || n == p {
+			break
 		}
-
-		padding := uint64(blksiz) - (p.Buffers.Off & (uint64(blksiz) - 1))
-		if padding != uint64(blksiz) {
-			ErofsDevFillzero(sbi, ErofsPos(sbi, blkaddr)-padding, padding, true)
-		}
-
-		if p.Type != DATA {
-			bmgr.MetaBlkCnt += uint32(BlkRoundUp(sbi, p.Buffers.Off))
-		}
-
-		// ErofsDbg("block %u to %u flushed", p.Blkaddr, blkaddr-1)
-		ErofsBfree(p)
+		p = n
 	}
 
+	fmt.Println("Erofs Bflush successfully executed")
 	return 0
 }
 
