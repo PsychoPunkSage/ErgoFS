@@ -140,6 +140,31 @@ func BufferBlockFromList(list *ListHead) *BufferBlock {
 	return (*BufferBlock)(unsafe.Pointer(containerAddr))
 }
 
+// Helper functions for clean type conversions
+// func BufferHeadFromList(list *ListHead) *BufferHead {
+// 	if list == nil {
+// 		return nil
+// 	}
+// 	offset := unsafe.Offsetof(BufferHead{}.List)
+// 	containerAddr := uintptr(unsafe.Pointer(list)) - offset
+// 	return (*BufferHead)(unsafe.Pointer(containerAddr))
+// }
+
+func BufferHeadFromList(list *ListHead) *BufferHead {
+	if list == nil {
+		return nil
+	}
+
+	offset := unsafe.Offsetof(BufferHead{}.List)
+	containerAddr := uintptr(unsafe.Pointer(list)) - offset
+
+	if containerAddr == 0 {
+		return nil
+	}
+
+	return (*BufferHead)(unsafe.Pointer(containerAddr))
+}
+
 // ListPrevEntry gets the previous entry in the list
 func ListPrevEntry(pos interface{}, member string) interface{} {
 	// Reflection to get the member field (ListHead) from pos
