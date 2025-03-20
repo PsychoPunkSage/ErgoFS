@@ -259,11 +259,15 @@ func BattachInternal(bb *BufferBlock, bh *BufferHead, incr uint64,
 	if oob >= 0 {
 		// The next buffer block should be NULL_ADDR all the time
 		if oob > 0 {
-			nextEntry := bb.List.Next
-			nextInterface := ContainerOf(nextEntry, &BufferBlock{}, "List")
-			next, _ := nextInterface.(*BufferBlock)
-
+			next := ListNextEntryBB(bb)
+			// Add checks to ensure next is valid
+			if next == nil {
+				fmt.Println("Next buffer block is nil")
+				return -EINVAL
+			}
+			fmt.Printf("Next buffer block: %+v\n", next)
 			if next.BlkAddr != NULL_ADDR {
+				fmt.Println("BattachInternal Failed: Next block address is not NULL_ADDR")
 				return -EINVAL
 			}
 		}
