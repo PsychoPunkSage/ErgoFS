@@ -65,7 +65,7 @@ func ErofsDevRead(sbi *SuperBlkInfo, deviceID int, buf []byte, offset uint64, le
 		}
 	}
 
-	return length, nil
+	return 0, nil
 }
 
 // ErofsDevFillzero - inline function to fill with zeros
