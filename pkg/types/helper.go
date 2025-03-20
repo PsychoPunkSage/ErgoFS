@@ -184,6 +184,7 @@ func BhFlushGenericEnd(bh *BufferHead) int {
 	return 0
 }
 
+// TO BE REMOVED
 // ContainerOf is a Go implementation of the C container_of macro
 // It returns a pointer to the struct that contains the given member
 // ptr: pointer to the member
@@ -265,7 +266,7 @@ func BattachInternal(bb *BufferBlock, bh *BufferHead, incr uint64,
 				fmt.Println("Next buffer block is nil")
 				return -EINVAL
 			}
-			fmt.Printf("Next buffer block: %+v\n", next)
+			// fmt.Printf("Next buffer block: %+v\n", next)
 			if next.BlkAddr != NULL_ADDR {
 				fmt.Println("BattachInternal Failed: Next block address is not NULL_ADDR")
 				return -EINVAL
