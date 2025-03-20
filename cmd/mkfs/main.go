@@ -450,6 +450,7 @@ func main() {
 
 	// types.ShowProgs() // args??
 	errs := util.DevOpen(&types.GSbi, types.GCfg.ImagePath, os.O_RDWR|0) // Assuming incremental_mode = true
+	// errs := util.DevOpen(&types.GSbi, types.GCfg.ImagePath, os.O_RDWR|os.O_TRUNC) // Assuming incremental_mode = true
 	if errs != nil {
 		fmt.Println("Something went wrong")
 		return
@@ -501,12 +502,14 @@ func main() {
 		return // goto exit
 	}
 
+	fmt.Println("Superblock successfully Written")
+
 	// flush all remaining buffers
-	err = types.ErofsBflush(types.GSbi.Bmgr, nil)
-	if err != 0 {
-		fmt.Println("Failed to flush buffers")
-		return // goto exit
-	}
+	// err = types.ErofsBflush(types.GSbi.Bmgr, nil)
+	// if err != 0 {
+	// 	fmt.Println("Failed to flush buffers")
+	// 	return // goto exit
+	// }
 
 	err = types.ErofsDevResize(&types.GSbi, nblocks)
 
