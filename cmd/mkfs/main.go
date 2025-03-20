@@ -230,172 +230,260 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/PsychoPunkSage/ErgoFS/pkg/types"
 	"github.com/PsychoPunkSage/ErgoFS/pkg/util"
-	"github.com/PsychoPunkSage/ErgoFS/pkg/writer"
 )
 
 func main() {
-	// Parse command line flags
-	debugLevel := flag.Int("d", 5, "Debug level (0-9)")
-	imagePath := flag.String("o", "", "Output image file path")
-	inputPath := flag.String("i", "", "Input directory path")
-	blockSize := flag.Int("b", 4096, "Block size in bytes (must be power of 2)")
-	volumeLabel := flag.String("L", "", "Volume label (max 15 bytes)")
+	// // Parse command line flags
+	// debugLevel := flag.Int("d", 5, "Debug level (0-9)")
+	// imagePath := flag.String("o", "", "Output image file path")
+	// inputPath := flag.String("i", "", "Input directory path")
+	// blockSize := flag.Int("b", 4096, "Block size in bytes (must be power of 2)")
+	// volumeLabel := flag.String("L", "", "Volume label (max 15 bytes)")
+	// flag.Parse()
+
+	// // Validate arguments
+	// if *imagePath == "" {
+	// 	fmt.Println("Error: Output image file path is required (-o)")
+	// 	flag.Usage()
+	// 	os.Exit(1)
+	// }
+
+	// if *inputPath == "" {
+	// 	fmt.Println("Error: Input directory path is required (-i)")
+	// 	flag.Usage()
+	// 	os.Exit(1)
+	// }
+
+	// // Set debug level
+	// types.GCfg.DebugLevel = *debugLevel
+
+	// // Calculate block size bits
+	// blockSizeBits := 0
+	// tmpSize := *blockSize
+	// for tmpSize > 1 {
+	// 	tmpSize >>= 1
+	// 	blockSizeBits++
+	// }
+
+	// // Validate block size
+	// if (1 << blockSizeBits) != *blockSize {
+	// 	types.Error("Block size %d is not a power of 2", *blockSize)
+	// 	os.Exit(1)
+	// }
+
+	// // Check if input directory exists
+	// inputStat, err := os.Stat(*inputPath)
+	// if err != nil {
+	// 	types.Error("Cannot access input directory: %v", err)
+	// 	os.Exit(1)
+	// }
+
+	// if !inputStat.IsDir() {
+	// 	types.Error("Input path is not a directory: %s", *inputPath)
+	// 	os.Exit(1)
+	// }
+
+	// // Initialize superblock info
+	// sbi := types.NewSuperBlockInfo()
+	// sbi.BlkSzBits = uint8(blockSizeBits)
+	// sbi.DevName = *imagePath
+
+	// // Set volume label if provided
+	// if *volumeLabel != "" {
+	// 	if len(*volumeLabel) > 15 {
+	// 		types.Warning("Volume label too long, truncating to 15 bytes")
+	// 		*volumeLabel = (*volumeLabel)[:15]
+	// 	}
+	// 	copy(sbi.VolumeName[:], []byte(*volumeLabel))
+	// }
+
+	// // Set current timestamp
+	// now := time.Now()
+	// sbi.BuildTime = uint64(now.Unix())
+	// sbi.BuildTimeNsec = uint32(now.Nanosecond())
+
+	// // Print filesystem creation information
+	// types.Info("Creating EroFS filesystem on %s", *imagePath)
+	// types.Info("Block size: %d bytes", *blockSize)
+	// types.Info("Input directory: %s", *inputPath)
+
+	// // Create or truncate the image file
+	// file, err := os.Create(*imagePath)
+	// if err != nil {
+	// 	types.Error("Failed to create image file: %v", err)
+	// 	os.Exit(1)
+	// }
+	// file.Close()
+
+	// // Initialize buffer manager at block 0
+	// sbi.Bmgr = util.InitBufferManager(sbi, 0)
+	// if sbi.Bmgr == nil {
+	// 	types.Error("Failed to initialize buffer manager")
+	// 	os.Exit(1)
+	// }
+
+	// // Reserve space for superblock
+	// sbBh, err := types.ReserveSuperblock(sbi.Bmgr)
+	// // tempSb := &SuperBlock{BlkSzBits: sbi.BlkSzBits} // Create a temporary SuperBlock with necessary fields
+	// if err != nil {
+	// 	types.Error("Failed to reserve superblock: %v", err)
+	// 	os.Exit(1)
+	// }
+
+	// // Create root inode
+	// rootInode := types.NewInode(sbi)
+	// rootInode.SetRoot()
+
+	// // Set NID for the root inode
+	// rootInode.Nid = 1
+	// sbi.RootNid = 1 // Root directory inode number
+
+	// // Walk the directory and collect files
+	// fileCount := 0
+	// err = filepath.Walk(*inputPath, func(path string, info os.FileInfo, err error) error {
+	// 	if err != nil {
+	// 		types.Warning("Error accessing path %s: %v", path, err)
+	// 		return nil
+	// 	}
+
+	// 	fileCount++
+	// 	return nil
+	// })
+
+	// if err != nil {
+	// 	types.Error("Failed to walk input directory: %v", err)
+	// 	os.Exit(1)
+	// }
+
+	// // Set inode count
+	// sbi.Inos = uint64(fileCount)
+	// types.Info("Found %d files/directories", fileCount)
+
+	// // Set up metadata block address (right after superblock)
+	// sbi.MetaBlkAddr = 1 // Block 0 is for superblock
+
+	// // Set compatible features
+	// sbi.SetFeature("sb_chksum")
+
+	// // Write the superblock
+	// var totalBlocks uint32
+	// err = writer.WriteSuperblock(sbi, sbBh, &totalBlocks)
+	// if err != nil {
+	// 	types.Error("Failed to write superblock: %v", err)
+	// 	os.Exit(1)
+	// }
+
+	// // Resize the device to the actual size used
+	// err = util.DevResize(sbi, totalBlocks)
+	// if err != nil {
+	// 	types.Error("Failed to resize the device: %v", err)
+	// 	os.Exit(1)
+	// }
+
+	// // Enable superblock checksum
+	// if types.HasFeature(sbi, "sb_chksum") {
+	// 	crc, err := writer.EnableSuperblockChecksum(sbi)
+	// 	if err != nil {
+	// 		types.Error("Failed to enable superblock checksum: %v", err)
+	// 		os.Exit(1)
+	// 	}
+	// 	types.Info("Superblock checksum: 0x%08x", crc)
+	// }
+
+	// types.Info("EroFS filesystem creation complete")
+	// types.Info("Total blocks: %d", totalBlocks)
+	// types.Info("Total inodes: %d", sbi.Inos)
+
+	// Define command-line flags
+	dbgLevel := flag.Int("d", 0, "Debug level") // Default debug level = 0
 	flag.Parse()
-
-	// Validate arguments
-	if *imagePath == "" {
-		fmt.Println("Error: Output image file path is required (-o)")
-		flag.Usage()
+	// Get positional arguments
+	args := flag.Args()
+	if len(args) < 2 {
+		fmt.Println("Usage: program -d <dbglevel> <image_path> <src_path>")
 		os.Exit(1)
 	}
+	imagePath := args[0]
+	srcPath := args[1]
+	fmt.Printf("Debug Level: %d, Image Path: %s, Source Path: %s\n", *dbgLevel, imagePath, srcPath)
 
-	if *inputPath == "" {
-		fmt.Println("Error: Input directory path is required (-i)")
-		flag.Usage()
-		os.Exit(1)
+	types.GCfg.SourcePath = srcPath
+	types.GCfg.ImagePath = imagePath
+	types.GCfg.DebugLevel = *dbgLevel
+
+	var err int
+	var sbBh *types.BufferHead
+	var nblocks uint32 = 0
+	var crc uint32
+
+	types.InitConfigure()
+	types.MkfsDefaultOptions(&types.GSbi)
+
+	if types.GSbi.BDev == nil {
+		fmt.Println("I'm here")
+		types.GSbi.BDev = &types.ErofsVFile{} // or appropriate initialization
 	}
 
-	// Set debug level
-	types.GlobalConfig.DebugLevel = *debugLevel
-
-	// Calculate block size bits
-	blockSizeBits := 0
-	tmpSize := *blockSize
-	for tmpSize > 1 {
-		tmpSize >>= 1
-		blockSizeBits++
+	// types.ShowProgs() // args??
+	errs := util.DevOpen(&types.GSbi, types.GCfg.ImagePath, os.O_RDWR|0) // Assuming incremental_mode = true
+	if errs != nil {
+		fmt.Println("Something went wrong")
+		return
 	}
 
-	// Validate block size
-	if (1 << blockSizeBits) != *blockSize {
-		types.Error("Block size %d is not a power of 2", *blockSize)
-		os.Exit(1)
+	// increamental mode = true
+	types.GSbi.Bmgr = types.ErofsBufferInit(&types.GSbi, 0)
+	if types.GSbi.Bmgr == nil {
+		// types.Exit("failed to initialize buffer manager")
+		err = -types.ENOMEM
 	}
 
-	// Check if input directory exists
-	inputStat, err := os.Stat(*inputPath)
-	if err != nil {
-		types.Error("Cannot access input directory: %v", err)
-		os.Exit(1)
+	sbBh, errors := types.ReserveSuperblock(types.GSbi.Bmgr)
+	if errors != nil {
+		fmt.Println("Failed to reserve superblock:", err)
+		return // goto exit
 	}
 
-	if !inputStat.IsDir() {
-		types.Error("Input path is not a directory: %s", *inputPath)
-		os.Exit(1)
+	fmt.Println("Superblock reserved successfully:", sbBh)
+
+	types.UUIDGenerate(types.GSbi.UUID[:])
+
+	err = types.ZErofsCompressInit(&types.GSbi, sbBh)
+	if err != 0 {
+		fmt.Println("Failed to initialize compressor")
+		return // goto exit
 	}
 
-	// Initialize superblock info
-	sbi := types.NewSuperBlockInfo()
-	sbi.BlkSzBits = uint8(blockSizeBits)
-	sbi.DevName = *imagePath
+	// flush all buffers except for superblock
+	err = types.ErofsBflush(types.GSbi.Bmgr, nil)
+	if err != 0 {
+		fmt.Println("Failed to flush buffers")
+		return // goto exit
+	}
 
-	// Set volume label if provided
-	if *volumeLabel != "" {
-		if len(*volumeLabel) > 15 {
-			types.Warning("Volume label too long, truncating to 15 bytes")
-			*volumeLabel = (*volumeLabel)[:15]
+	err = types.WriteSuperBlock(&types.GSbi, sbBh, &nblocks)
+	if err != 0 {
+		fmt.Println("Failed to write SB")
+		return // goto exit
+	}
+
+	// flush all remaining buffers
+	err = types.ErofsBflush(types.GSbi.Bmgr, nil)
+	if err != 0 {
+		fmt.Println("Failed to flush buffers")
+		return // goto exit
+	}
+
+	err = types.ErofsDevResize(&types.GSbi, nblocks)
+
+	if err == 0 && types.GSbi.ErofsSbHasSbChksum() {
+		err = types.ErofsEnableSbChksum(&types.GSbi, &crc)
+		if err == 0 {
+			fmt.Printf("SuperBlock checksum 0x%08x written\n", crc)
+			return // goto exit
 		}
-		copy(sbi.VolumeName[:], []byte(*volumeLabel))
 	}
-
-	// Set current timestamp
-	now := time.Now()
-	sbi.BuildTime = uint64(now.Unix())
-	sbi.BuildTimeNsec = uint32(now.Nanosecond())
-
-	// Print filesystem creation information
-	types.Info("Creating EroFS filesystem on %s", *imagePath)
-	types.Info("Block size: %d bytes", *blockSize)
-	types.Info("Input directory: %s", *inputPath)
-
-	// Create or truncate the image file
-	file, err := os.Create(*imagePath)
-	if err != nil {
-		types.Error("Failed to create image file: %v", err)
-		os.Exit(1)
-	}
-	file.Close()
-
-	// Initialize buffer manager at block 0
-	sbi.Bmgr = util.InitBufferManager(sbi, 0)
-	if sbi.Bmgr == nil {
-		types.Error("Failed to initialize buffer manager")
-		os.Exit(1)
-	}
-
-	// Reserve space for superblock
-	sbBh, err := util.ReserveSuperblock(sbi.Bmgr)
-	if err != nil {
-		types.Error("Failed to reserve superblock: %v", err)
-		os.Exit(1)
-	}
-
-	// Create root inode
-	rootInode := types.NewInode(sbi)
-	rootInode.SetRoot()
-
-	// Set NID for the root inode
-	rootInode.Nid = 1
-	sbi.RootNid = 1 // Root directory inode number
-
-	// Walk the directory and collect files
-	fileCount := 0
-	err = filepath.Walk(*inputPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			types.Warning("Error accessing path %s: %v", path, err)
-			return nil
-		}
-
-		fileCount++
-		return nil
-	})
-
-	if err != nil {
-		types.Error("Failed to walk input directory: %v", err)
-		os.Exit(1)
-	}
-
-	// Set inode count
-	sbi.Inos = uint64(fileCount)
-	types.Info("Found %d files/directories", fileCount)
-
-	// Set up metadata block address (right after superblock)
-	sbi.MetaBlkAddr = 1 // Block 0 is for superblock
-
-	// Set compatible features
-	sbi.SetFeature("sb_chksum")
-
-	// Write the superblock
-	var totalBlocks uint32
-	err = writer.WriteSuperblock(sbi, sbBh, &totalBlocks)
-	if err != nil {
-		types.Error("Failed to write superblock: %v", err)
-		os.Exit(1)
-	}
-
-	// Resize the device to the actual size used
-	err = util.DevResize(sbi, totalBlocks)
-	if err != nil {
-		types.Error("Failed to resize the device: %v", err)
-		os.Exit(1)
-	}
-
-	// Enable superblock checksum
-	if types.HasFeature(sbi, "sb_chksum") {
-		crc, err := writer.EnableSuperblockChecksum(sbi)
-		if err != nil {
-			types.Error("Failed to enable superblock checksum: %v", err)
-			os.Exit(1)
-		}
-		types.Info("Superblock checksum: 0x%08x", crc)
-	}
-
-	types.Info("EroFS filesystem creation complete")
-	types.Info("Total blocks: %d", totalBlocks)
-	types.Info("Total inodes: %d", sbi.Inos)
 }
