@@ -1,9 +1,15 @@
 package types
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"math/bits"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"syscall"
 	"unsafe"
 )
 
@@ -12,6 +18,17 @@ import (
 // "github.com/PsychoPunkSage/ErgoFS/pkg/types/compressor"
 
 // var zErofsMtEnabled bool
+
+// Global list head for compression hints
+var CompressHintsHead ListHead
+
+// ErofsCompressHints represents compression hints for specific files
+type ErofsCompressHints struct {
+	List                ListHead
+	Reg                 *regexp.Regexp
+	PhysicalClusterblks uint
+	AlgorithmType       uint8
+}
 
 type ErofsAlgorithm struct {
 	Name      string
@@ -79,11 +96,166 @@ type ZErofsZstdCfgs struct {
 
 var ErofsCCfg [EROFS_MAX_COMPR_CFGS]ErofsCompressCfg
 
+func ErofsLoadCompressHints(sbi *SuperBlkInfo) int {
+	buf := make([]byte, PATH_MAX+100)
+	line := uint(1)
+	maxPclustersize := uint(0)
+	ret := 0
+
+	if GCfg.CompressHintsFile == "" {
+		return 0
+	}
+
+	f, err := os.Open(GCfg.CompressHintsFile)
+	if err != nil {
+		return -ENOENT
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lineText := scanner.Text()
+
+		// Skip comments and empty lines
+		if len(lineText) == 0 || lineText[0] == '#' || lineText[0] == '\n' {
+			line++
+			continue
+		}
+
+		// Copy line to buffer (to match C strtok behavior)
+		copy(buf, []byte(lineText))
+		bufStr := string(buf[:len(lineText)])
+
+		// Split the line (equivalent to strtok in C)
+		fields := strings.Fields(bufStr)
+		if len(fields) < 2 {
+			fmt.Printf("cannot find a match pattern at line %d\n", line)
+			ret = -EINVAL
+			goto out
+		}
+
+		// Parse pclustersize
+		pclustersize, err := strconv.Atoi(fields[0])
+		if err != nil {
+			fmt.Printf("invalid pclustersize at line %d\n", line)
+			ret = -int(syscall.EINVAL)
+			goto out
+		}
+
+		var alg string
+		var pattern string
+
+		if len(fields) == 2 {
+			// Only pattern is provided, no algorithm
+			alg = ""
+			pattern = fields[1]
+		} else {
+			// Both algorithm and pattern are provided
+			alg = fields[1]
+			pattern = fields[2]
+		}
+
+		if pattern == "" {
+			fmt.Printf("cannot find a match pattern at line %d\n", line)
+			ret = -int(syscall.EINVAL)
+			goto out
+		}
+
+		var ccfg uint
+		if alg == "" {
+			ccfg = 0
+		} else {
+			ccfgVal, err := strconv.Atoi(alg)
+			if err != nil || ccfgVal < 0 {
+				fmt.Printf("invalid compressing configuration \"%s\" at line %d\n", alg, line)
+				ret = -int(syscall.EINVAL)
+				goto out
+			}
+
+			ccfg = uint(ccfgVal)
+			if ccfg >= uint(EROFS_MAX_COMPR_CFGS) ||
+				GCfg.CompressionOptions[ccfg].Algorithm == "" {
+				fmt.Printf("invalid compressing configuration \"%s\" at line %d\n", alg, line)
+				ret = -int(syscall.EINVAL)
+				goto out
+			}
+		}
+
+		if uint32(pclustersize)%ErofsBlkSiz(sbi) != 0 {
+			fmt.Printf("invalid physical clustersize %d, use default pclusterblks %d\n",
+				pclustersize, GCfg.MkfsPclusterSizeDef)
+			line++
+			continue
+		}
+
+		ErofsInsertCompressHints(pattern,
+			uint(pclustersize/int(ErofsBlkSiz(sbi))),
+			ccfg)
+
+		if uint(pclustersize) > maxPclustersize {
+			maxPclustersize = uint(pclustersize)
+		}
+
+		line++
+	}
+
+	if GCfg.MkfsPclusterSizeMax < uint32(maxPclustersize) {
+		GCfg.MkfsPclusterSizeMax = uint32(maxPclustersize)
+		fmt.Printf("update max pclustersize to %d\n", GCfg.MkfsPclusterSizeMax)
+	}
+
+out:
+	// The defer will close the file
+	return ret
+}
+
+// ErofsInsertCompressHints inserts a compression hint
+func ErofsInsertCompressHints(s string, blks, algorithmType uint) int {
+	ch := &ErofsCompressHints{
+		PhysicalClusterblks: blks,
+		AlgorithmType:       uint8(algorithmType),
+	}
+
+	// Initialize the list entry
+	InitListHead(&ch.List)
+
+	// Compile the regular expression
+	reg, err := regexp.Compile(s)
+	if err != nil {
+		fmt.Printf("invalid regex %s (%s)\n", s, err.Error())
+		return -EINVAL
+	}
+	ch.Reg = reg
+
+	// Add to the list
+	ListAddTail(&ch.List, &CompressHintsHead)
+
+	fmt.Printf("compress hint %s (%d) is inserted\n", s, blks)
+	return 0
+}
+
 func ZErofsCompressInit(sbi *SuperBlkInfo, sbBh *BufferHead) int {
 	maxDictSize := make([]uint32, Z_EROFS_COMPRESSION_MAX)
 	availableComprAlgs := uint32(0)
 
-	for i := 0; GCfg.CompressionOptions[i].Algorithm != ""; i++ {
+	if len(GCfg.CompressionOptions) == 0 {
+		fmt.Println("No compression options configured")
+		return -1 // Or appropriate return code for no compression
+	}
+
+	// Make sure ErofsCCfg has the same length as GCfg.CompressionOptions
+	if len(ErofsCCfg) < len(GCfg.CompressionOptions) {
+		// Either resize ErofsCCfg or return an error
+		fmt.Println("ErofsCCfg not properly initialized")
+		return -1
+	}
+
+	for i := 0; i < len(GCfg.CompressionOptions); i++ {
+		// Skip empty algorithms
+		if GCfg.CompressionOptions[i].Algorithm == "" {
+			continue
+		}
+
 		c := &ErofsCCfg[i].Handle
 
 		ret := erofsCompressorInit(sbi, c, GCfg.CompressionOptions[i].Algorithm, GCfg.CompressionOptions[i].Level, GCfg.CompressionOptions[i].DictSize)
@@ -96,6 +268,7 @@ func ZErofsCompressInit(sbi *SuperBlkInfo, sbBh *BufferHead) int {
 			// return fmt.Errorf("failed to get compress algorithm ID: %w", err)
 			return -1
 		}
+
 		ErofsCCfg[i].AlgorithmType = id
 		ErofsCCfg[i].Enable = true
 		availableComprAlgs |= 1 << ErofsCCfg[i].AlgorithmType
