@@ -5,7 +5,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 // Config represents the mkfs build configuration
@@ -111,7 +110,7 @@ func InitConfigure() *Config {
 	}
 }
 
-func DefaultOptions(sbi *SuperBlkInfo) {
+func MkfsDefaultOptions(sbi *SuperBlkInfo) {
 	GCfg.ShowProgress = true
 	GCfg.LegacyCompress = false
 	GCfg.InlineData = true
@@ -119,8 +118,8 @@ func DefaultOptions(sbi *SuperBlkInfo) {
 
 	// For MT_ENABLED equivalent in Go, we'd need to use runtime.NumCPU()
 	// Assuming you want to add this functionality:
-	GCfg.MtWorkers = uint32(runtime.NumCPU())
-	GCfg.MkfsSegmentSize = 16 * 1024 * 1024 // 16 MB
+	// GCfg.MtWorkers = uint32(runtime.NumCPU())
+	// GCfg.MkfsSegmentSize = 16 * 1024 * 1024 // 16 MB
 
 	// Set blocksize bits based on page size or max block size
 	pageSize := os.Getpagesize()
@@ -161,3 +160,4 @@ func isatty() bool {
 
 // Global configuration instance
 var GCfg = InitConfigure()
+var GSbi SuperBlkInfo
