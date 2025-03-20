@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"reflect"
 	"unsafe"
 )
@@ -116,6 +117,29 @@ func ListNextEntry(pos interface{}, member string) interface{} {
 	return ListEntry(nextHead, pos, member)
 }
 
+// PPS::> TESTING
+//
+//	func ListNextEntryBB(pos *BufferBlock) *BufferBlock {
+//		return ContainerOf(pos.List.Next, BufferBlock{}, "List").(*BufferBlock)
+//	}
+//
+// Then use these directly
+func ListNextEntryBB(pos *BufferBlock) *BufferBlock {
+	if pos.List.Next == nil {
+		return nil
+	}
+	return BufferBlockFromList(pos.List.Next)
+}
+
+func BufferBlockFromList(list *ListHead) *BufferBlock {
+	if list == nil {
+		return nil
+	}
+	offset := unsafe.Offsetof(BufferBlock{}.List)
+	containerAddr := uintptr(unsafe.Pointer(list)) - offset
+	return (*BufferBlock)(unsafe.Pointer(containerAddr))
+}
+
 // ListPrevEntry gets the previous entry in the list
 func ListPrevEntry(pos interface{}, member string) interface{} {
 	// Reflection to get the member field (ListHead) from pos
@@ -134,14 +158,6 @@ func ListPrevEntry(pos interface{}, member string) interface{} {
 }
 
 // ForEachInList is a helper for the list_for_each macro
-// Usage example:
-// var pos *ListHead
-//
-//	ForEachInList(func(p *ListHead) bool {
-//	    pos = p
-//	    // Do something with pos
-//	    return true  // continue iteration
-//	}, head)
 func ForEachInList(f func(*ListHead) bool, head *ListHead) {
 	for pos := head.Next; pos != head; pos = pos.Next {
 		if !f(pos) {
@@ -241,43 +257,54 @@ func ForEachEntrySafe(head *ListHead, container interface{}, member string, f fu
 }
 
 // ContainerOf is a helper to get the containing struct from a member
-func ContainerOf(ptr, typ interface{}, member string) interface{} {
+func ContainerOf(ptr interface{}, containerType interface{}, memberName string) interface{} {
+	// Get the pointer value
 	ptrVal := reflect.ValueOf(ptr)
-	if ptrVal.Kind() != reflect.Ptr {
+	if ptrVal.Kind() != reflect.Ptr && ptrVal.Kind() != reflect.UnsafePointer {
 		panic("ContainerOf: ptr must be a pointer")
 	}
 
 	// Get the type of the container
-	containerType := reflect.TypeOf(typ)
-	if containerType.Kind() != reflect.Struct {
-		panic("ContainerOf: typ must be a struct")
+	containerTypeVal := reflect.TypeOf(containerType)
+	if containerTypeVal.Kind() == reflect.Ptr {
+		containerTypeVal = containerTypeVal.Elem()
 	}
 
-	// Find the field in the struct
-	var field reflect.StructField
-	for i := 0; i < containerType.NumField(); i++ {
-		if containerType.Field(i).Name == member {
-			field = containerType.Field(i)
+	// Find the field offset
+	var fieldOffset uintptr
+	var found bool
+	for i := 0; i < containerTypeVal.NumField(); i++ {
+		field := containerTypeVal.Field(i)
+		if field.Name == memberName {
+			fieldOffset = field.Offset
+			found = true
 			break
 		}
 	}
 
-	if field.Name == "" {
-		panic("ContainerOf: member not found in struct")
+	if !found {
+		panic(fmt.Sprintf("ContainerOf: member '%s' not found in type %v",
+			memberName, containerTypeVal))
 	}
 
-	// Calculate the offset of the member in the struct
-	memberOffset := field.Offset
+	// Calculate the container address
+	var ptrAddr uintptr
+	if ptrVal.Kind() == reflect.Ptr {
+		ptrAddr = ptrVal.Pointer()
+	} else {
+		// For UnsafePointer
+		ptrAddr = uintptr(ptrVal.Interface().(unsafe.Pointer))
+	}
+	containerAddr := ptrAddr - fieldOffset
 
-	// Calculate the address of the container
-	ptrAddr := ptrVal.Pointer()
-	containerAddr := ptrAddr - memberOffset
+	// Create a new container and set its address
+	container := reflect.New(containerTypeVal).Interface()
 
-	// Create a new container struct and set its address
-	containerPtr := reflect.New(containerType).Interface()
-	*(*uintptr)(unsafe.Pointer(&containerPtr)) = containerAddr
+	// Copy the memory from the calculated address to the new container
+	dst := unsafe.Pointer(reflect.ValueOf(container).Pointer())
+	*(*uintptr)(dst) = containerAddr
 
-	return containerPtr
+	return container
 }
 
 // ForEachEntrySafeWithPos is a more direct equivalent to list_for_each_entry_safe
