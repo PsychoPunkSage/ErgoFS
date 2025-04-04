@@ -341,39 +341,13 @@ const (
 	LZ4_DISTANCE_MAX = 65535
 )
 
+const (
+	NR_HARDLINK_HASHTABLE      = 16384
+	Z_EROFS_LZMA_MAX_DICT_SIZE = (8 * Z_EROFS_PCLUSTER_MAX_SIZE)
+	Z_EROFS_ZSTD_MAX_DICT_SIZE = Z_EROFS_PCLUSTER_MAX_SIZE
+)
+
 // FRAGMENT_HASH computes the hash for a fragment
 func FRAGMENT_HASH(c uint) uint {
 	return c & (FRAGMENT_HASHSIZE - 1)
 }
-
-const NR_HARDLINK_HASHTABLE = 16384
-
-// ForceInodeVersion represents the forced inode version setting
-type ForceInodeVersion uint8
-
-type ForceChunkFormat uint8
-
-// TimestampType represents the timestamp inheritance mode
-type TimestampType uint8
-
-// FragDedupeMode represents the fragment deduplication mode
-type FragDedupeMode uint8
-
-// ====== internal.h ======
-type ErofsOffT uint64
-
-type ErofsNidT uint64
-
-type ErofsBlkT uint32
-
-// ====== erofs_fs.h ======
-// type InodeDataLayout int
-
-// #define EROFS_DEVT_SLOT_SIZE	sizeof(struct erofs_deviceslot)
-// #define EROFS_XATTR_ALIGN(size) round_up(size, sizeof(struct erofs_xattr_entry))
-// #define EROFS_BLOCK_MAP_ENTRY_SIZE	sizeof(__le32)
-// #define Z_EROFS_ALL_COMPR_ALGS		((1 << Z_EROFS_COMPRESSION_MAX) - 1)
-const Z_EROFS_LZMA_MAX_DICT_SIZE = (8 * Z_EROFS_PCLUSTER_MAX_SIZE)
-const Z_EROFS_ZSTD_MAX_DICT_SIZE = Z_EROFS_PCLUSTER_MAX_SIZE
-
-// #define Z_EROFS_FULL_INDEX_ALIGN(end)	\	(round_up(end, 8) + sizeof(struct z_erofs_map_header) + 8)
