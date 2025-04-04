@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	errs "github.com/PsychoPunkSage/ErgoFS/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -92,7 +93,7 @@ func UUIDGenerate(out []byte) error {
 
 func UuidParse(in string, uu []byte) int {
 	if len(uu) < 16 {
-		return -EINVAL
+		return -errs.EINVAL
 	}
 
 	// Remove all hyphens and spaces
@@ -101,14 +102,14 @@ func UuidParse(in string, uu []byte) int {
 
 	// Check length
 	if len(cleaned) != 32 {
-		return -EINVAL
+		return -errs.EINVAL
 	}
 
 	// Decode hex string
 	dst := make([]byte, hex.DecodedLen(len(cleaned)))
 	_, err := hex.Decode(dst, []byte(cleaned))
 	if err != nil {
-		return -EINVAL
+		return -errs.EINVAL
 	}
 
 	// Copy to output
