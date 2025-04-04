@@ -1,10 +1,8 @@
 package types
 
 import (
-	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 )
 
 // Config represents the mkfs build configuration
@@ -137,25 +135,6 @@ func MkfsDefaultOptions(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat = EROFS_FEATURE_INCOMPAT_ZERO_PADDING
 	sbi.FeatureCompat = EROFS_FEATURE_COMPAT_SB_CHKSUM |
 		EROFS_FEATURE_COMPAT_MTIME
-}
-
-func ShowProgs(args []string) {
-	if GCfg.DebugLevel >= EROFS_WARN {
-		programName := filepath.Base(args[0])
-		fmt.Printf("%s %s\n", programName, GCfg.Version)
-	}
-}
-
-// isatty determines if stdout is a TTY (similar to C's isatty function)
-func isatty() bool {
-	fileInfo, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-
-	// Check if it's a character device (TTY)
-	// This is OS-specific but works on most Unix-like systems
-	return (fileInfo.Mode() & os.ModeCharDevice) != 0
 }
 
 // Global configuration instance
