@@ -117,13 +117,6 @@ func ListNextEntry(pos interface{}, member string) interface{} {
 	return ListEntry(nextHead, pos, member)
 }
 
-// PPS::> TESTING
-//
-//	func ListNextEntryBB(pos *BufferBlock) *BufferBlock {
-//		return ContainerOf(pos.List.Next, BufferBlock{}, "List").(*BufferBlock)
-//	}
-//
-// Then use these directly
 func ListNextEntryBB(pos *BufferBlock) *BufferBlock {
 	if pos.List.Next == nil {
 		return nil
