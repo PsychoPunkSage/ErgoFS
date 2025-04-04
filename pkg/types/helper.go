@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"unsafe"
+
+	errs "github.com/PsychoPunkSage/ErgoFS/pkg/errors"
 )
 
 // BfindForAttach finds a buffer block to attach to
@@ -18,7 +20,7 @@ func BfindForAttach(bmgr *BufferManager, btype int, size uint64,
 	used0 = ((uint32(size) + requiredExt) & (blkSiz - 1)) + inlineExt
 	// inline data should be in the same fs block
 	if used0 > blkSiz {
-		return nil, fmt.Errorf("ENOSPC: %d", ENOSPC)
+		return nil, fmt.Errorf("ENOSPC: %d", errs.ENOSPC)
 	}
 
 	if used0 == 0 || alignsize == blkSiz {
@@ -264,12 +266,12 @@ func BattachInternal(bb *BufferBlock, bh *BufferHead, incr uint64,
 			// Add checks to ensure next is valid
 			if next == nil {
 				fmt.Println("Next buffer block is nil")
-				return -EINVAL
+				return -errs.EINVAL
 			}
 			// fmt.Printf("Next buffer block: %+v\n", next)
 			if next.BlkAddr != NULL_ADDR {
 				fmt.Println("BattachInternal Failed: Next block address is not NULL_ADDR")
-				return -EINVAL
+				return -errs.EINVAL
 			}
 		}
 
@@ -279,7 +281,7 @@ func BattachInternal(bb *BufferBlock, bh *BufferHead, incr uint64,
 				uint32(BlkRoundUp(sbi, boff)))
 
 			if oob > 0 && !tailupdate {
-				return -EINVAL
+				return -errs.EINVAL
 			}
 		}
 	}
@@ -302,35 +304,50 @@ func BattachInternal(bb *BufferBlock, bh *BufferHead, incr uint64,
 	return int(((alignedoffset + incr - 1) & uint64(blkmask)) + 1)
 }
 
-// Roundup rounds up a number to the nearest multiple of align
-func RoundUp(x, y uint64) uint64 {
-	if y == 0 {
-		return x // Avoid division by zero
-	}
-	return ((x + (y - 1)) / y) * y
-}
-
-func RoundDown(x, y int) int {
-	return x - (x % y)
-}
-
-// Cmpsgn compares two numbers and returns sign (negative, zero, positive)
-func Cmpsgn(a, b uint64) int {
-	if a < b {
-		return -1
-	} else if a > b {
-		return 1
-	}
-	return 0
-}
-
-// BlkRoundUp rounds up offset to the next block
-func BlkRoundUp(sbi *SuperBlkInfo, offset uint64) uint64 {
-	blksz := ErofsBlkSiz(sbi)
-	return RoundUp(offset, uint64(blksz)) >> sbi.BlkSzBits
-}
-
 // ErofsPos converts a block number to byte position
 func ErofsPos(sbi *SuperBlkInfo, nr uint64) uint64 {
 	return uint64(nr) << sbi.BlkSzBits
+}
+
+// Helper function to get alignment size
+func GetAlignSize(sbi *SuperBlkInfo, bufType int) (int, int) {
+	if bufType == DATA {
+		return int(sbi.ErofsBlockSize()), bufType
+	}
+
+	if bufType == INODE {
+		return 32, // Size of struct erofs_inode_compact <PPS::> Need to code it>
+			META
+	} else if bufType == DIRA {
+		return int(sbi.ErofsBlockSize()), META
+	} else if bufType == XATTR {
+		return 4, // Size of struct erofs_xattr_entry <PPS:: need to implement it>
+			META
+	} else if bufType == DEVT {
+		return int(EROFS_DEVT_SLOT_SIZE), META
+	}
+
+	if bufType == META {
+		return 1, bufType
+	}
+
+	return -errs.EINVAL, 0 // Error
+}
+
+// Crc32c calculates CRC32C checksum (Castagnoli polynomial)
+func Crc32c(crc uint32, data []byte) uint32 {
+	const polynomial uint32 = 0x82F63B78
+
+	for _, b := range data {
+		crc ^= uint32(b)
+		for i := 0; i < 8; i++ {
+			if crc&1 != 0 {
+				crc = (crc >> 1) ^ polynomial
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+
+	return crc
 }
