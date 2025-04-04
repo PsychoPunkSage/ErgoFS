@@ -1,122 +1,122 @@
 package types
 
 // lz4_0padding
-func (sbi *SuperBlkInfo) ErofsSbHasLz40Padding() bool {
+func ErofsSbHasLz40Padding(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_ZERO_PADDING != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetLz40Padding() {
+func ErofsSbSetLz40Padding(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_ZERO_PADDING
 }
-func (sbi *SuperBlkInfo) ErofsSbClearLz40Padding() {
+func ErofsSbClearLz40Padding(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_ZERO_PADDING
 }
 
 // compr_cfgs
-func (sbi *SuperBlkInfo) ErofsSbHasComprCfgs() bool {
+func ErofsSbHasComprCfgs(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_COMPR_CFGS != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetComprCfgs() {
+func ErofsSbSetComprCfgs(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_COMPR_CFGS
 }
-func (sbi *SuperBlkInfo) ErofsSbClearComprCfgs() {
+func ErofsSbClearComprCfgs(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_COMPR_CFGS
 }
 
 // big_pcluster
-func (sbi *SuperBlkInfo) ErofsSbHasBigPcluster() bool {
+func ErofsSbHasBigPcluster(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetBigPcluster() {
+func ErofsSbSetBigPcluster(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER
 }
-func (sbi *SuperBlkInfo) ErofsSbClearBigPcluster() {
+func ErofsSbClearBigPcluster(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER
 }
 
 // chunked_file
-func (sbi *SuperBlkInfo) ErofsSbHasChunkedFile() bool {
+func ErofsSbHasChunkedFile(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_CHUNKED_FILE != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetChunkedFile() {
+func ErofsSbSetChunkedFile(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_CHUNKED_FILE
 }
-func (sbi *SuperBlkInfo) ErofsSbClearChunkedFile() {
+func ErofsSbClearChunkedFile(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_CHUNKED_FILE
 }
 
 // device_table
-func (sbi *SuperBlkInfo) ErofsSbHasDeviceTable() bool {
+func ErofsSbHasDeviceTable(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_DEVICE_TABLE != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetDeviceTable() {
+func ErofsSbSetDeviceTable(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_DEVICE_TABLE
 }
-func (sbi *SuperBlkInfo) ErofsSbClearDeviceTable() {
+func ErofsSbClearDeviceTable(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_DEVICE_TABLE
 }
 
 // ztailpacking
-func (sbi *SuperBlkInfo) ErofsSbHasZtailpacking() bool {
+func ErofsSbHasZtailpacking(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_ZTAILPACKING != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetZtailpacking() {
+func ErofsSbSetZtailpacking(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_ZTAILPACKING
 }
-func (sbi *SuperBlkInfo) ErofsSbClearZtailpacking() {
+func ErofsSbClearZtailpacking(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_ZTAILPACKING
 }
 
 // fragments
-func (sbi *SuperBlkInfo) ErofsSbHasFragments() bool {
+func ErofsSbHasFragments(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_FRAGMENTS != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetFragments() {
+func ErofsSbSetFragments(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_FRAGMENTS
 }
-func (sbi *SuperBlkInfo) ErofsSbClearFragments() {
+func ErofsSbClearFragments(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_FRAGMENTS
 }
 
 // dedupe
-func (sbi *SuperBlkInfo) ErofsSbHasDedupe() bool {
+func ErofsSbHasDedupe(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_DEDUPE != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetDedupe() {
+func ErofsSbSetDedupe(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_DEDUPE
 }
-func (sbi *SuperBlkInfo) ErofsSbClearDedupe() {
+func ErofsSbClearDedupe(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_DEDUPE
 }
 
 // xattr_prefixes
-func (sbi *SuperBlkInfo) ErofsSbHasXattrPrefixes() bool {
+func ErofsSbHasXattrPrefixes(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureIncompat&EROFS_FEATURE_INCOMPAT_XATTR_PREFIXES != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetXattrPrefixes() {
+func ErofsSbSetXattrPrefixes(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat |= EROFS_FEATURE_INCOMPAT_XATTR_PREFIXES
 }
-func (sbi *SuperBlkInfo) ErofsSbClearXattrPrefixes() {
+func ErofsSbClearXattrPrefixes(sbi *SuperBlkInfo) {
 	sbi.FeatureIncompat &^= EROFS_FEATURE_INCOMPAT_XATTR_PREFIXES
 }
 
 // sb_chksum
-func (sbi *SuperBlkInfo) ErofsSbHasSbChksum() bool {
+func ErofsSbHasSbChksum(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureCompat&EROFS_FEATURE_COMPAT_SB_CHKSUM != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetSbChksum() {
+func ErofsSbSetSbChksum(sbi *SuperBlkInfo) {
 	sbi.FeatureCompat |= EROFS_FEATURE_COMPAT_SB_CHKSUM
 }
-func (sbi *SuperBlkInfo) ErofsSbClearSbChksum() {
+func ErofsSbClearSbChksum(sbi *SuperBlkInfo) {
 	sbi.FeatureCompat &^= EROFS_FEATURE_COMPAT_SB_CHKSUM
 }
 
 // xattr_filter
-func (sbi *SuperBlkInfo) ErofsSbHasXattrFilter() bool {
+func ErofsSbHasXattrFilter(sbi *SuperBlkInfo) bool {
 	return sbi.FeatureCompat&EROFS_FEATURE_COMPAT_XATTR_FILTER != 0
 }
-func (sbi *SuperBlkInfo) ErofsSbSetXattrFilter() {
+func ErofsSbSetXattrFilter(sbi *SuperBlkInfo) {
 	sbi.FeatureCompat |= EROFS_FEATURE_COMPAT_XATTR_FILTER
 }
-func (sbi *SuperBlkInfo) ErofsSbClearXattrFilter() {
+func ErofsSbClearXattrFilter(sbi *SuperBlkInfo) {
 	sbi.FeatureCompat &^= EROFS_FEATURE_COMPAT_XATTR_FILTER
 }
