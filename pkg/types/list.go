@@ -158,6 +158,16 @@ func BufferHeadFromList(list *ListHead) *BufferHead {
 	return (*BufferHead)(unsafe.Pointer(containerAddr))
 }
 
+// ErofsDentryFromListHead converts a ListHead pointer to an ErofsDentry pointer
+func ErofsDentryFromList(list *ListHead) *ErofsDentry {
+	if list == nil {
+		return nil
+	}
+	offset := unsafe.Offsetof(ErofsDentry{}.DChild)
+	containerAddr := uintptr(unsafe.Pointer(list)) - offset
+	return (*ErofsDentry)(unsafe.Pointer(containerAddr))
+}
+
 // ListPrevEntry gets the previous entry in the list
 func ListPrevEntry(pos interface{}, member string) interface{} {
 	// Reflection to get the member field (ListHead) from pos
@@ -175,8 +185,8 @@ func ListPrevEntry(pos interface{}, member string) interface{} {
 	return ListEntry(prevHead, pos, member)
 }
 
-// ForEachInList is a helper for the list_for_each macro
-func ForEachInList(f func(*ListHead) bool, head *ListHead) {
+// ListForEachInList is a helper for the list_for_each macro
+func ListForEachInList(f func(*ListHead) bool, head *ListHead) {
 	for pos := head.Next; pos != head; pos = pos.Next {
 		if !f(pos) {
 			break
@@ -184,8 +194,8 @@ func ForEachInList(f func(*ListHead) bool, head *ListHead) {
 	}
 }
 
-// ForEachInListSafe is a helper for the list_for_each_safe macro
-func ForEachInListSafe(f func(*ListHead, *ListHead) bool, head *ListHead) {
+// ListForEachInListSafe is a helper for the list_for_each_safe macro
+func ListForEachInListSafe(f func(*ListHead, *ListHead) bool, head *ListHead) {
 	var n *ListHead
 	for pos := head.Next; pos != head; pos = n {
 		n = pos.Next
@@ -195,10 +205,10 @@ func ForEachInListSafe(f func(*ListHead, *ListHead) bool, head *ListHead) {
 	}
 }
 
-// ForEachEntry is a helper for list_for_each_entry
+// ListForEachEntry is a helper for list_for_each_entry
 // Usage requires type assertions since Go doesn't support C-style macros directly
 // Example usage is shown in the package test cases
-func ForEachEntry(head *ListHead, container interface{}, member string, f func(interface{}) bool) {
+func ListForEachEntry(head *ListHead, container interface{}, member string, f func(interface{}) bool) {
 	pos := ListFirstEntry(head, container, member)
 
 	for {
@@ -206,7 +216,7 @@ func ForEachEntry(head *ListHead, container interface{}, member string, f func(i
 		memberField := posValue.FieldByName(member)
 
 		if !memberField.IsValid() {
-			panic("ForEachEntry: invalid member field")
+			panic("ListForEachEntry: invalid member field")
 		}
 
 		listHead := memberField.Interface().(*ListHead)
@@ -222,8 +232,8 @@ func ForEachEntry(head *ListHead, container interface{}, member string, f func(i
 	}
 }
 
-// ForEachEntryReverse iterates the list in reverse order
-func ForEachEntryReverse(head *ListHead, container interface{}, member string, f func(interface{}) bool) {
+// ListForEachEntryReverse iterates the list in reverse order
+func ListForEachEntryReverse(head *ListHead, container interface{}, member string, f func(interface{}) bool) {
 	pos := ListLastEntry(head, container, member)
 
 	for {
@@ -231,7 +241,7 @@ func ForEachEntryReverse(head *ListHead, container interface{}, member string, f
 		memberField := posValue.FieldByName(member)
 
 		if !memberField.IsValid() {
-			panic("ForEachEntryReverse: invalid member field")
+			panic("ListForEachEntryReverse: invalid member field")
 		}
 
 		listHead := memberField.Interface().(*ListHead)
@@ -247,8 +257,8 @@ func ForEachEntryReverse(head *ListHead, container interface{}, member string, f
 	}
 }
 
-// ForEachEntrySafe iterates the list safely (allows removal during iteration)
-func ForEachEntrySafe(head *ListHead, container interface{}, member string, f func(interface{}, interface{}) bool) {
+// ListForEachEntrySafe iterates the list safely (allows removal during iteration)
+func ListForEachEntrySafe(head *ListHead, container interface{}, member string, f func(interface{}, interface{}) bool) {
 	pos := ListFirstEntry(head, container, member)
 
 	for {
@@ -256,7 +266,7 @@ func ForEachEntrySafe(head *ListHead, container interface{}, member string, f fu
 		memberField := posValue.FieldByName(member)
 
 		if !memberField.IsValid() {
-			panic("ForEachEntrySafe: invalid member field")
+			panic("ListForEachEntrySafe: invalid member field")
 		}
 
 		listHead := memberField.Interface().(*ListHead)
@@ -325,10 +335,10 @@ func ContainerOf(ptr interface{}, containerType interface{}, memberName string) 
 	return container
 }
 
-// ForEachEntrySafeWithPos is a more direct equivalent to list_for_each_entry_safe
+// ListForEachEntrySafeWithPos is a more direct equivalent to list_for_each_entry_safe
 // It iterates the list safely while providing direct access to pos and n
 // This allows for a syntax closer to the original C macro
-func ForEachEntrySafeWithPos(head *ListHead, container interface{}, member string) func() (interface{}, interface{}, bool) {
+func ListForEachEntrySafeWithPos(head *ListHead, container interface{}, member string) func() (interface{}, interface{}, bool) {
 	// Initialize pos and n
 	pos := ListFirstEntry(head, container, member)
 
