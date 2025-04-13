@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -236,8 +237,8 @@ func ErofsBeginCompressedFile(inode *ErofsInode, fd int, fpos uint64) (interface
 
 	if GCfg.AllFragments && !erofsIsPackedInode(inode) &&
 		inode.FragmentSize == 0 {
-		ret = ZErofsPackFileFromFd(inode, fd, ictx.tofChksum)
-		if ret != 0 {
+		err := ZErofsPackFileFromFd(inode, fd, ictx.tofChksum)
+		if err != nil {
 			goto errFreeIdata
 		}
 	}
@@ -271,6 +272,111 @@ errFreeIctx:
 		// No need to explicitly free the struct in Go
 	}
 	return nil, fmt.Errorf("failed to begin compressed file: %v", ret)
+}
+
+// ZErofsPackFileFromFd is the Go equivalent of z_erofs_pack_file_from_fd
+func ZErofsPackFileFromFd(inode *ErofsInode, fd int, toCrc uint32) error {
+	epi := inode.Sbi.PackedInode
+
+	// Get current offset
+	offset, err := syscall.Seek(epi.Fd, 0, SEEK_CUR)
+	if err != nil {
+		return err
+	}
+
+	inode.Fragmentoff = offset
+	inode.FragmentSize = int64(inode.ISize)
+
+	// Try to mmap the file
+	memblock, err := syscall.Mmap(fd, 0, int(inode.ISize), syscall.PROT_READ, syscall.MAP_SHARED)
+	if err != nil {
+		// Fall back to reading in chunks
+		remaining := inode.FragmentSize
+
+		for remaining > 0 {
+			// Define buffer size
+			bufSize := 32768
+			if remaining < int64(bufSize) {
+				bufSize = int(remaining)
+			}
+
+			// Read buffer
+			buf := make([]byte, bufSize)
+			n, err := syscall.Read(fd, buf)
+			if err != nil {
+				return err
+			}
+			if n <= 0 {
+				if n == 0 {
+					return errors.New("EIO: unexpected end of file")
+				}
+				return err
+			}
+
+			// Adjust buffer if we didn't read full size
+			if n < bufSize {
+				buf = buf[:n]
+			}
+
+			// Write to destination
+			written, err := syscall.Write(epi.Fd, buf)
+			if err != nil {
+				return err
+			}
+			if written != n {
+				return errors.New("EIO: incomplete write")
+			}
+
+			remaining -= int64(n)
+		}
+
+		// Reset fd position
+		_, err = syscall.Seek(fd, 0, SEEK_SET)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Use mmap data directly
+		written, err := syscall.Write(epi.Fd, memblock)
+		if err != nil {
+			syscall.Munmap(memblock)
+			return err
+		}
+		if int64(written) != inode.FragmentSize {
+			syscall.Munmap(memblock)
+			return errors.New("EIO: incomplete write")
+		}
+	}
+
+	// debugLog(fmt.Sprintf("Recording %d fragment data at %d",
+	// 	inode.FragmentSize, inode.Fragmentoff))
+	hashIndex := FRAGMENT_HASH(uint(toCrc))
+	headPtr := unsafe.Pointer(uintptr(unsafe.Pointer(epi.Hash)) + uintptr(hashIndex)*unsafe.Sizeof(ListHead{}))
+	head := (*ListHead)(headPtr)
+
+	var result error
+	if memblock != nil {
+		// Call fragment deduplication function
+		result = ZErofsFragmentsDedupeInsert(
+			head, // PPS: ISSUE prone
+			unsafe.Pointer(&memblock[0]),
+			inode.FragmentSize,
+			inode.Fragmentoff,
+		)
+
+		// Clean up mmap
+		syscall.Munmap(memblock)
+	}
+
+	if result != nil {
+		// errorLog(fmt.Sprintf("Failed to record %d-byte fragment data @ %d for nid %d: %v",
+		// 	inode.FragmentSize, inode.Fragmentoff, inode.Nid, result))
+		fmt.Sprintf("Failed to record %d-byte fragment data @ %d for nid %d: %v\n",
+			inode.FragmentSize, inode.Fragmentoff, inode.Nid, result)
+	}
+
+	return result
+
 }
 
 func WriteUncompressedFileFromFd(inode *ErofsInode, fd int) error {
