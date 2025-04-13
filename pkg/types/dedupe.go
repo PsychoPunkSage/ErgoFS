@@ -54,7 +54,7 @@ func ZErofsFragmentsDedupeFind(inode *ErofsInode, fd int, crc uint32) int {
 	var di *ErofsFragmentDedupeItem = nil
 
 	// head := &(epi.Hash[FRAGMENT_HASH(uint(crc))])
-	hashIndex := FRAGMENT_HASH(uint(crc))
+	hashIndex := FRAGMENT_HASH(uint(crc)) // PPS: Issue prone
 	// Get pointer to the hashIndex-th element
 	headPtr := unsafe.Pointer(uintptr(unsafe.Pointer(epi.Hash)) + uintptr(hashIndex)*unsafe.Sizeof(ListHead{}))
 	head := (*ListHead)(headPtr)
@@ -177,4 +177,43 @@ func ZErofsFragmentsDedupeFind(inode *ErofsInode, fd int, crc uint32) int {
 	}
 
 	return 0
+}
+
+// ZErofsFragmentsDedupeInsert is the Go equivalent of z_erofs_fragments_dedupe_insert
+func ZErofsFragmentsDedupeInsert(hash *ListHead, data unsafe.Pointer, length int64, pos int64) error {
+	// Early return cases
+	if length <= EROFS_TOF_HASHLEN {
+		return nil
+	}
+
+	// Adjust data and position if length exceeds max size
+	if length > EROFS_FRAGMENT_INMEM_SZ_MAX {
+		dataPtr := uintptr(data) + uintptr(length-EROFS_FRAGMENT_INMEM_SZ_MAX)
+		data = unsafe.Pointer(dataPtr)
+		pos += length - EROFS_FRAGMENT_INMEM_SZ_MAX
+		length = EROFS_FRAGMENT_INMEM_SZ_MAX
+	}
+
+	// Allocate memory for the item including flexible array
+	// In Go, we need to allocate memory for the struct plus the data array
+	// totalSize := unsafe.Sizeof(ErofsFragmentDedupeItem{}) + uintptr(length) - 1 // -1 because Data already has 1 byte
+	// di := (*ErofsFragmentDedupeItem)(erofs_malloc(totalSize))
+	// if di == nil {
+	// 	return fmt.Errorf("[%v] Improper emory allcoation\n", -errs.ENOMEM)
+	// }
+	di := &ErofsFragmentDedupeItem{
+		length: uint32(length),
+		pos:    pos,
+		data:   make([]byte, length),
+	}
+
+	// Copy data to the flexible array
+	dataSlice := unsafe.Slice((*byte)(data), length)
+	diDataPtr := unsafe.Pointer(&di.data[0])
+	diDataSlice := unsafe.Slice((*byte)(diDataPtr), length)
+	copy(diDataSlice, dataSlice)
+
+	// Add to the list
+	ListAddTail(&di.list, hash)
+	return nil
 }
