@@ -106,6 +106,16 @@ const (
 	EROFS_INODE_COMPRESSED_COMPACT = 3
 	EROFS_INODE_CHUNK_BASED        = 4
 	EROFS_INODE_DATALAYOUT_MAX     = 5
+	NR_INODE_HASHTABLE             = 16384
+)
+
+// seek
+const (
+	SEEK_SET  = 0 /* Seek from beginning of file.  */
+	SEEK_CUR  = 1 /* Seek from current position.  */
+	SEEK_END  = 2 /* Seek from end of file.  */
+	SEEK_DATA = 3 /* Seek to next data.  */
+	SEEK_HOLE = 4 /* Seek to next hole.  */
 )
 
 // Erofs_FT
@@ -240,6 +250,8 @@ const (
 	EROFSXattrFilterBits    = 32
 	EROFSXattrFilterDefault = math.MaxUint32
 	EROFSXattrFilterSeed    = 0x25BBE08F
+
+	EROFSISLOTBITS = 5
 
 	EROFSNullAddr = 0
 )
