@@ -2,11 +2,15 @@ package types
 
 import (
 	"fmt"
+	"io"
 	"math"
+	"os"
 	"syscall"
 	"unsafe"
 
+	comp "github.com/PsychoPunkSage/ErgoFS/pkg/compression"
 	errs "github.com/PsychoPunkSage/ErgoFS/pkg/errors"
+	"golang.org/x/sys/unix"
 )
 
 var inodeHashtable [NR_INODE_HASHTABLE]ListHead
@@ -127,6 +131,308 @@ out:
 	ErofsPrepareInodeBuffer(inode)
 	ErofsWriteTailEnd(inode)
 	return inode, nil
+}
+
+func ErofsBeginCompressedFile(inode *ErofsInode, fd int, fpos uint64) (interface{}, error) {
+	sbi := inode.Sbi
+	var ictx *ZErofsCompressIctx
+	var ret int
+
+	// initialize per-file compression setting
+	inode.ZAdvise = 0
+	inode.ZLogicalClusterbits = sbi.BlkSzBits
+	if !GCfg.LegacyCompress && inode.ZLogicalClusterbits <= 14 {
+		if inode.ZLogicalClusterbits <= 12 {
+			inode.ZAdvise |= Z_EROFS_ADVISE_COMPACTED_2B
+		}
+		inode.DataLayout = EROFS_INODE_COMPRESSED_COMPACT
+	} else {
+		inode.DataLayout = EROFS_INODE_COMPRESSED_FULL
+	}
+
+	if ErofsSbHasBigPcluster(sbi) {
+		inode.ZAdvise |= Z_EROFS_ADVISE_BIG_PCLUSTER_1
+		if inode.DataLayout == EROFS_INODE_COMPRESSED_COMPACT {
+			inode.ZAdvise |= Z_EROFS_ADVISE_BIG_PCLUSTER_2
+		}
+	}
+	if GCfg.Fragments && !GCfg.Dedupe {
+		inode.ZAdvise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER
+	}
+
+	// #ifndef NDEBUG
+	// Debug code from original - commented out for reference
+	/*
+		if GCfg.RandomAlgorithms {
+			for {
+				inode.ZAlgorithmType[0] = rand.Intn(EROFS_MAX_COMPR_CFGS)
+				if ErofsCCfg[inode.ZAlgorithmType[0]].enable {
+					break
+				}
+			}
+		}
+	*/
+	// #endif
+
+	inode.IdataSize = 0
+	inode.FragmentSize = 0
+
+	zErofsMtEnabled := false // PPS::> Need to solve
+	if !zErofsMtEnabled ||
+		(GCfg.AllFragments && !erofsIsPackedInode(inode)) {
+		// #ifdef EROFS_MT_ENABLED
+		// Multi-threading code from original - commented out for reference
+		/*
+			GIctx.mutex.Lock()
+			if GIctx.segNum > 0 {
+				GIctx.cond.Wait()
+			}
+			GIctx.segNum = 1
+			GIctx.mutex.Unlock()
+		*/
+		// #endif
+		ictx = GIctx
+		ictx.fd = fd
+	} else {
+		ictx = new(ZErofsCompressIctx)
+		if ictx == nil {
+			// return errPtr(-syscall.ENOMEM)
+			return nil, fmt.Errorf("[%v] failed to allocate memory for ZErofsCompressIctx\n", -errs.ENOMEM)
+		}
+		var err error
+		ictx.fd, err = syscall.Dup(fd)
+		if err != nil {
+			return nil, fmt.Errorf("[%v] failed to dup fd: %v\n", -errs.EINVAL, err)
+		}
+	}
+
+	ictx.ccfg = &comp.ErofsCCfg[inode.ZAlgorithmType[0]]
+	inode.ZAlgorithmType[0] = uint8(ictx.ccfg.AlgorithmType)
+	inode.ZAlgorithmType[1] = 0
+
+	/*
+	 * Handle tails in advance to avoid writing duplicated
+	 * parts into the packed inode.
+	 */
+	if GCfg.Fragments && !erofsIsPackedInode(inode) &&
+		GCfg.FragmentDedupe != FRAGDEDUPE_OFF {
+		ret = ZErofsFragmentsDedupe(inode, fd, &ictx.tofChksum)
+		if ret < 0 {
+			goto errFreeIctx
+		}
+
+		if GCfg.FragmentDedupe == FRAGDEDUPE_INODE &&
+			inode.FragmentSize < int64(inode.ISize) {
+			fmt.Printf("Discard the sub-inode tail fragment of %s\n",
+				inode.ISrcpath)
+			inode.FragmentSize = 0
+		}
+	}
+	ictx.inode = inode
+	ictx.fpos = fpos
+	InitListHead(&ictx.extents)
+	ictx.fixDedupedfrag = false
+	ictx.fragemitted = false
+
+	if GCfg.AllFragments && !erofsIsPackedInode(inode) &&
+		inode.FragmentSize == 0 {
+		ret = ZErofsPackFileFromFd(inode, fd, ictx.tofChksum)
+		if ret != 0 {
+			goto errFreeIdata
+		}
+	}
+
+	// #ifdef EROFS_MT_ENABLED
+	// MT-specific code from original - commented out for reference
+	/*
+		if ictx != &GIctx {
+			ret = zErofsMtCompress(ictx)
+			if ret != 0 {
+				goto errFreeIdata
+			}
+		}
+	*/
+	// #endif
+
+	return ictx, nil
+
+errFreeIdata:
+	if inode.Idata != nil {
+		// In Go, we don't explicitly free memory, but we should nil the reference
+		inode.Idata = nil
+	}
+
+errFreeIctx:
+	if ictx != GIctx {
+		// Close the duplicated file descriptor if needed
+		if ictx.fd > 0 {
+			syscall.Close(ictx.fd)
+		}
+		// No need to explicitly free the struct in Go
+	}
+	return nil, fmt.Errorf("failed to begin compressed file: %v", ret)
+}
+
+func WriteUncompressedFileFromFd(inode *ErofsInode, fd int) error {
+	var len uint
+	var nblocks, ii uint32
+
+	sbi := inode.Sbi
+
+	inode.DataLayout = EROFS_INODE_FLAT_INLINE
+	nblocks = uint32(inode.ISize) >> sbi.BlkSzBits
+
+	err := ErofsAllocateInodeBhData(inode, nblocks)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < int(nblocks); i += int(len >> uint(sbi.BlkSzBits)) {
+		maxLen := uint64(^uint32(0)) & ^uint64((1<<sbi.BlkSzBits)-1)
+		remaining := ErofsPos(sbi, uint64(nblocks-ii))
+
+		if maxLen < remaining {
+			len = uint(maxLen)
+		} else {
+			len = uint(remaining)
+		}
+
+		err = ErofsIoXcopy(
+			sbi.BDev,
+			int64(ErofsPos(sbi, uint64(inode.IBlkaddr+ii))),
+			&ErofsVFile{Fd: fd},
+			len,
+			inode.DataSource == EROFS_INODE_DATA_SOURCE_DISKBUF,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Handle tail-end data (partial last block)
+	inode.IdataSize = uint16(uint32(inode.ISize) % ErofsBlkSiz(sbi))
+	if inode.IdataSize != 0 {
+		// Allocate memory for the tail data
+		buffer := make([]byte, inode.IdataSize)
+
+		// Read the tail data from the file descriptor
+		file := os.NewFile(uintptr(fd), "")
+		n, err := io.ReadFull(file, buffer)
+		if err != nil || uint16(n) < inode.IdataSize {
+			inode.Idata = nil
+			return syscall.EIO
+		}
+
+		// Convert the byte slice to unsafe.Pointer
+		inode.Idata = unsafe.Pointer(&buffer[0])
+	}
+
+	ErofsDroidBlocklistWrite(inode, inode.IBlkaddr, nblocks)
+	return nil
+}
+
+func ErofsDroidBlocklistWrite(inode *ErofsInode, block uint32, nblocks uint32) {} // no-op
+
+func ErofsIoXcopy(vout *ErofsVFile, pos int64, vin *ErofsVFile, length uint, noseek bool) error {
+	// If output file has operations defined, use them
+	if vout.Ops != nil {
+		if copiedBytes := vout.Ops.Xcopy(vout, pos, vin, uint(length), noseek); copiedBytes < 0 {
+			return fmt.Errorf("Xcopy failed with code %d", copiedBytes)
+		}
+		return nil
+	}
+
+	// Try to use efficient copy mechanisms if input has no custom operations
+	if length > 0 && vin.Ops == nil {
+		// Try copy_file_range syscall (Linux-specific)
+		// This is a direct implementation of the HAVE_COPY_FILE_RANGE section
+		remaining := int(length)
+		copiedBytes, err := unix.CopyFileRange(vin.Fd, nil, vout.Fd, &pos, remaining, 0)
+		if err == nil && copiedBytes > 0 {
+			remaining -= int(copiedBytes)
+			length = uint(remaining)
+		}
+
+		// Try sendfile if we still have data to copy and noseek is false
+		// This is a direct implementation of the HAVE_SENDFILE section
+		if length > 0 && !noseek {
+			_, err := syscall.Seek(vout.Fd, pos, io.SeekStart)
+			if err == nil {
+				// Use sendfile to copy data
+				copiedBytes, err := syscall.Sendfile(vout.Fd, vin.Fd, nil, int(length))
+				if err == nil && copiedBytes > 0 {
+					pos += int64(copiedBytes)
+					length -= uint(copiedBytes)
+				}
+			}
+		}
+	}
+
+	// Fall back to manual copy if necessary
+	for length > 0 {
+		// Create a buffer for copying data
+		bufSize := uint(32768) // Same buffer size as in C code
+		if length < bufSize {
+			bufSize = length
+		}
+		buf := make([]byte, bufSize)
+
+		// Read data from input file
+		n, err := ErofsIoRead(vin, buf, int(bufSize))
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			break // End of file or nothing to read
+		}
+
+		// Write data to output file
+		written, err := ErofsIoPwrite(vout, buf[:n], uint64(pos), n)
+		if err != nil {
+			return err
+		}
+
+		// Update position and remaining length
+		pos += int64(written)
+		length -= uint(written)
+	}
+
+	return nil
+}
+
+func ErofsAllocateInodeBhData(inode *ErofsInode, nblocks uint32) error {
+	var bh *BufferHead
+	var typ int
+
+	bmgr := inode.Sbi.Bmgr
+
+	if nblocks == 0 {
+		inode.IBlkaddr = NULL_ADDR
+		return nil
+	}
+
+	if os.FileMode(inode.IMode).IsDir() {
+		typ = DIRA
+	} else {
+		typ = DATA
+	}
+
+	bh, err := Balloc(bmgr, typ, ErofsPos(inode.Sbi, uint64(nblocks)), 0, 0)
+	if err != nil {
+		return err
+	}
+
+	bh.Op = &SkipWriteBhops
+	inode.BhData = bh
+
+	// get blk addr of bh
+	ret := MapBh(nil, bh.Block)
+	if ret < 0 {
+		return fmt.Errorf("failed to map bh: %v", ret)
+	}
+
+	inode.IBlkaddr = bh.Block.BlkAddr
+	return nil
 }
 
 func ErofsFillInode(inode *ErofsInode, st *syscall.Stat_t, path string) error {
