@@ -3,10 +3,16 @@ package types
 import (
 	"fmt"
 	"reflect"
+	"strings"
+	"sync/atomic"
+	"syscall"
 	"unsafe"
 
 	errs "github.com/PsychoPunkSage/ErgoFS/pkg/errors"
+	"golang.org/x/sys/unix"
 )
+
+var FullpathPrefix int
 
 // BfindForAttach finds a buffer block to attach to
 func BfindForAttach(bmgr *BufferManager, btype int, size uint64,
@@ -350,4 +356,61 @@ func Crc32c(crc uint32, data []byte) uint32 {
 	}
 
 	return crc
+}
+
+func lseek(fd int, offset int64, whence int) int64 {
+	// This would typically use the syscall package in Go
+	// return syscall.Seek(fd, offset, whence)
+	// Or use os.File.Seek if working with os.File objects
+	// For compatibility with the original C code signature
+	off, err := syscall.Seek(fd, offset, whence)
+	if err != nil {
+		return -errs.EINVAL
+	}
+	return int64(off)
+}
+
+func ErofsFspath(fullpath string) string {
+	// Skip prefix characters
+	if FullpathPrefix >= len(fullpath) {
+		return ""
+	}
+	s := fullpath[FullpathPrefix:]
+
+	// Trim leading slashes
+	return strings.TrimLeft(s, "/")
+}
+
+// Major returns the major device number from a device ID
+func Major(dev uint64) uint32 {
+	return unix.Major(dev)
+}
+
+// Minor returns the minor device number from a device ID
+func Minor(dev uint64) uint32 {
+	return unix.Minor(dev)
+}
+
+// IS_ROOT checks if an inode is the root inode
+func IS_ROOT(inode *ErofsInode) bool {
+	return inode == erofsParentInode(inode)
+}
+
+// erofsParentInode gets the parent inode with the lowest bit masked off
+func erofsParentInode(inode *ErofsInode) *ErofsInode {
+	// In Go, we need to use uintptr for pointer arithmetic
+	ptr := uintptr(unsafe.Pointer(inode.IParent))
+	// Clear the lowest bit (equivalent to & ~1UL in C)
+	ptr &= ^uintptr(1)
+	return (*ErofsInode)(unsafe.Pointer(ptr))
+}
+
+func ErofsAtomicDecReturn(InodeICount *int32) uint {
+	fmt.Println("ErofsAtomicDecReturn")
+	return erofsAtomicSubReturn(InodeICount, 1)
+}
+
+func erofsAtomicSubReturn(ptr *int32, i int32) uint {
+	fmt.Println("ErofsAtomicDecReturn - Internal")
+	return uint(atomic.AddInt32(ptr, ^(i - 1)))
 }
