@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"math"
 	"syscall"
 
 	errs "github.com/PsychoPunkSage/ErgoFS/pkg/errors"
@@ -73,6 +74,44 @@ func ErofsDevRead(sbi *SuperBlkInfo, deviceID int, buf []byte, offset uint64, le
 	}
 
 	return 0, nil
+}
+
+func ErofsIoRead(vf *ErofsVFile, buf []byte, bytes int) (int, error) {
+	if vf.Ops != nil {
+		return int(vf.Ops.Read(vf, buf, uint64(bytes))), nil
+	}
+
+	i := 0
+
+	// Read in chunks (handling large reads)
+	for bytes > 0 {
+		// Determine chunk size (INT_MAX or remaining bytes)
+		chunkSize := bytes
+		if bytes > math.MaxInt32 {
+			chunkSize = math.MaxInt32
+		}
+
+		// Read from file descriptor
+		n, err := syscall.Read(vf.Fd, buf[i:i+chunkSize])
+
+		// Handle read result
+		if n < 1 {
+			if n == 0 {
+				// End of file reached
+				break
+			} else if err != nil && err != syscall.EINTR {
+				// Error occurred (except for interrupts which we retry)
+				fmt.Printf("failed to read: %s\n", err.Error())
+				return i, err
+			}
+		}
+
+		// Update counters
+		bytes -= n
+		i += n
+	}
+
+	return i, nil
 }
 
 func ErofsIoPread(vf *ErofsVFile, buf []byte, pos uint64, length int64) (int64, error) {
