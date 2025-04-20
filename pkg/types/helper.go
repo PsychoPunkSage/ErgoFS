@@ -358,6 +358,20 @@ func Crc32c(crc uint32, data []byte) uint32 {
 	return crc
 }
 
+func ErofsGetCrc32c(crc uint32, in []byte, length int) uint32 {
+	for i := 0; i < length; i++ {
+		crc ^= uint32(in[i])
+		for j := 0; j < 8; j++ {
+			if crc&1 != 0 {
+				crc = (crc >> 1) ^ CRC32C_POLY_LE
+			} else {
+				crc = crc >> 1
+			}
+		}
+	}
+	return crc
+}
+
 func lseek(fd int, offset int64, whence int) int64 {
 	// This would typically use the syscall package in Go
 	// return syscall.Seek(fd, offset, whence)
