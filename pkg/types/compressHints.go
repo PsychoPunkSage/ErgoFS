@@ -1,14 +1,10 @@
 package types
 
-import "regexp"
+import (
+	"regexp"
 
-// struct erofs_compress_hints {
-// 	struct list_head list;
-
-// 	regex_t reg;
-// 	unsigned int physical_clusterblks;
-// 	unsigned char algorithmtype;
-// };
+	comp "github.com/PsychoPunkSage/ErgoFS/pkg/compression"
+)
 
 type ErofsCompressHints struct {
 	List                ListHead
@@ -16,6 +12,31 @@ type ErofsCompressHints struct {
 	physicalClusterblks uint
 	algorithmType       uint
 }
+
+type ZErofsCompressIctx struct {
+	// inode context
+	inode *ErofsInode
+	ccfg  *comp.ErofsCompressCfg
+	fd    int
+	fpos  uint64
+
+	tofChksum      uint32
+	fixDedupedfrag bool
+	fragemitted    bool
+
+	// fields for write indexes
+	metacur    []byte
+	extents    ListHead
+	clusterofs uint16
+	segNum     int
+
+	// // For MT-enabled builds
+	// mutex   sync.Mutex         // Only used if EROFS_MT_ENABLED
+	// cond    *sync.Cond         // Only used if EROFS_MT_ENABLED
+	// mtworks *ErofsCompressWork // Only used if EROFS_MT_ENABLED
+}
+
+var GIctx *ZErofsCompressIctx
 
 func zErodsApplyCompressHints(inode *ErofsInode) bool {
 	var r *ErofsCompressHints
