@@ -158,6 +158,7 @@ type ErofsInodeCompact struct {
 }
 
 type ErofsPackedInode struct {
+	// Hash         *ListHead  // hash list
 	Hash         *ListHead  // hash list
 	Fd           int        // file descriptor
 	UptoDate     *uint64    // likely represents a bitmap or array indicating which parts of the inode's data are up-to-date.
@@ -226,10 +227,10 @@ func ErofsReadInodeFromDisk(vi *ErofsInode) error {
 	// // This is a simplified version - in practice, you'd use binary.Read or a struct decoder
 	// ifmt = dic.IFormat
 
-	// Set datalayout
+	// Set DataLayout
 	// vi.DataLayout = ErofsInodeDatalayout(ifmt)
 	// if vi.DataLayout >= EROFS_INODE_DATALAYOUT_MAX {
-	// 	return fmt.Errorf("unsupported datalayout %d of nid %d: %w",
+	// 	return fmt.Errorf("unsupported DataLayout %d of nid %d: %w",
 	// 		vi.DataLayout, vi.Nid, syscall.Errno(EOPNOTSUPP))
 	// }
 
