@@ -394,8 +394,8 @@ func ZErofsCompressInit(sbi *types.SuperBlkInfo, sbBh *types.BufferHead) int {
 	// }
 
 	// // Initialize synchronization primitives
-	// gIctx.mutex = sync.Mutex{}
-	// gIctx.cond = sync.NewCond(&gIctx.mutex)
+	// GIctx.mutex = sync.Mutex{}
+	// GIctx.cond = sync.NewCond(&GIctx.mutex)
 
 	return 0
 }
